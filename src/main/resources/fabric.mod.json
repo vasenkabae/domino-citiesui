@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "dominocitiesui",
+  "version": "${version}",
+  "name": "Domino Cities UI",
+  "description": "Окно управления городами Domino Craft (клавиша K).",
+  "authors": ["vasenka"],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["ru.vasenka.dominocitiesui.DominoCitiesUIClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "*",
+    "fabric-api": "*"
+  }
+}
