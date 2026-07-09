@@ -3,7 +3,7 @@ package ru.vasenka.dominocitiesui;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
@@ -16,10 +16,10 @@ public class DominoCitiesUIClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         // Регистрация типов пакетов (иначе клиент не заявит каналы серверу и не примет их).
-        PayloadTypeRegistry.playC2S().register(Payloads.Action.TYPE, Payloads.Action.CODEC);
-        PayloadTypeRegistry.playS2C().register(Payloads.State.TYPE, Payloads.State.CODEC);
-        PayloadTypeRegistry.playS2C().register(Payloads.Top.TYPE, Payloads.Top.CODEC);
-        PayloadTypeRegistry.playS2C().register(Payloads.Result.TYPE, Payloads.Result.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(Payloads.Action.TYPE, Payloads.Action.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.State.TYPE, Payloads.State.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.Top.TYPE, Payloads.Top.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.Result.TYPE, Payloads.Result.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -30,11 +30,11 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onResult(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
-        openKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.dominocities.open",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
-                "key.categories.dominocities"));
+                KeyMapping.Category.MISC));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) {

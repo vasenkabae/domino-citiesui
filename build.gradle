@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version '1.11-SNAPSHOT'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'java'
 }
 
@@ -14,12 +14,22 @@ repositories {
     mavenCentral()
 }
 
+loom {
+    splitEnvironmentSourceSets()
+
+    mods {
+        "dominocitiesui" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
 dependencies {
+    // Для MC 26.x loom берёт имена из самого артефакта minecraft (нет отдельных mappings).
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    // Официальные Mojang-маппинги: для MC 26.x yarn не публикуется.
-    mappings loom.officialMojangMappings()
-    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 }
 
 processResources {
@@ -29,15 +39,13 @@ processResources {
     }
 }
 
-java {
-    // MC 26.x требует Java 25; тулчейн не завязан на enum версии Gradle.
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
-    }
-    withSourcesJar()
-}
-
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 25
     it.options.encoding = "UTF-8"
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }

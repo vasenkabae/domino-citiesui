@@ -3,7 +3,7 @@ package ru.vasenka.dominocitiesui;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Custom-payload каналы dominocities:*. Каждый пакет несёт «сырой» byte[], который мы
@@ -20,8 +20,8 @@ public final class Payloads {
         return b;
     }
 
-    private static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(Protocol.NS, path);
+    private static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(Protocol.NS, path);
     }
 
     public record Action(byte[] data) implements CustomPacketPayload {

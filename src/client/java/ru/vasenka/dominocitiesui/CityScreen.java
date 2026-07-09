@@ -1,6 +1,6 @@
 package ru.vasenka.dominocitiesui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -113,17 +113,22 @@ public class CityScreen extends Screen {
                 .bounds(cx - 60, this.height - 40, 120, 20).build());
     }
 
+    // Новая система рендера 26.x: рисуем через GuiGraphicsExtractor.
+    // Цвета ARGB — обязателен альфа-канал 0xFF, иначе текст «прозрачный».
+    private static final int WHITE = 0xFFFFFFFF;
+    private static final int GRAY  = 0xFFAAAAAA;
+
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        super.render(g, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(g, mouseX, mouseY, partialTick);
         int cx = this.width / 2;
-        g.drawCenteredString(this.font, this.title, cx, 16, 0xFFFFFF);
+        g.centeredText(this.font, this.title, cx, 16, WHITE);
 
         if (CityData.protocolMismatch) {
-            g.drawCenteredString(this.font, Component.literal("§cВерсия мода не совпадает с сервером."),
-                    cx, this.height / 2 - 10, 0xFF5555);
-            g.drawCenteredString(this.font, Component.literal("§7Обнови лаунчер Domino Craft."),
-                    cx, this.height / 2 + 4, 0xAAAAAA);
+            g.centeredText(this.font, Component.literal("§cВерсия мода не совпадает с сервером."),
+                    cx, this.height / 2 - 10, WHITE);
+            g.centeredText(this.font, Component.literal("§7Обнови лаунчер Domino Craft."),
+                    cx, this.height / 2 + 4, GRAY);
             return;
         }
 
@@ -133,47 +138,47 @@ public class CityScreen extends Screen {
         } else if (CityData.hasCity) {
             renderCity(g, cx, top);
         } else {
-            g.drawCenteredString(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, 0xAAAAAA);
-            g.drawCenteredString(this.font, Component.literal("§7Встань у своего Колокола и основай."), cx, top + 22, 0xAAAAAA);
+            g.centeredText(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, GRAY);
+            g.centeredText(this.font, Component.literal("§7Встань у своего Колокола и основай."), cx, top + 22, GRAY);
         }
 
         // Строка результата последнего действия
         if (!CityData.lastResult.isEmpty()) {
-            int color = CityData.lastOk ? 0x55FF55 : 0xFF5555;
-            g.drawCenteredString(this.font, Component.literal(CityData.lastResult), cx, this.height - 60, color);
+            g.centeredText(this.font, Component.literal((CityData.lastOk ? "§a" : "§c") + CityData.lastResult),
+                    cx, this.height - 60, WHITE);
         }
     }
 
-    private void renderCity(GuiGraphics g, int cx, int top) {
-        g.drawString(this.font, Component.literal("§6" + CityData.cityName), cx - 150, top, 0xFFFFFF);
-        g.drawString(this.font, Component.literal("§7Мэр: §f" + CityData.mayorName), cx - 150, top + 12, 0xFFFFFF);
-        g.drawString(this.font, Component.literal("§7Радиус: §f" + CityData.radius
-                + "  §7Очки: §f" + CityData.score), cx - 150, top + 24, 0xFFFFFF);
+    private void renderCity(GuiGraphicsExtractor g, int cx, int top) {
+        g.text(this.font, Component.literal("§6" + CityData.cityName), cx - 150, top, WHITE);
+        g.text(this.font, Component.literal("§7Мэр: §f" + CityData.mayorName), cx - 150, top + 12, WHITE);
+        g.text(this.font, Component.literal("§7Радиус: §f" + CityData.radius
+                + "  §7Очки: §f" + CityData.score), cx - 150, top + 24, WHITE);
 
         int y = top + 44;
         int shown = Math.min(8, CityData.members.size());
         for (int i = 0; i < shown; i++) {
             CityData.Member m = CityData.members.get(i);
             String tag = m.mayor() ? " §6(мэр)" : "";
-            g.drawString(this.font, Component.literal("§f• " + m.name() + tag), cx - 150, y, 0xFFFFFF);
+            g.text(this.font, Component.literal("§f• " + m.name() + tag), cx - 150, y, WHITE);
             y += 18;
         }
         if (CityData.members.size() > shown) {
-            g.drawString(this.font, Component.literal("§7… ещё " + (CityData.members.size() - shown)),
-                    cx - 150, y, 0xAAAAAA);
+            g.text(this.font, Component.literal("§7… ещё " + (CityData.members.size() - shown)),
+                    cx - 150, y, GRAY);
         }
     }
 
-    private void renderTop(GuiGraphics g, int cx, int top) {
+    private void renderTop(GuiGraphicsExtractor g, int cx, int top) {
         if (CityData.top.isEmpty()) {
-            g.drawCenteredString(this.font, Component.literal("§7Городов пока нет."), cx, top + 12, 0xAAAAAA);
+            g.centeredText(this.font, Component.literal("§7Городов пока нет."), cx, top + 12, GRAY);
             return;
         }
         int y = top;
         int place = 1;
         for (CityData.TopEntry e : CityData.top) {
-            g.drawString(this.font, Component.literal("§e" + place + ". §f" + e.name()
-                    + " §7— " + e.members() + " жит., " + e.score() + " очков"), cx - 150, y, 0xFFFFFF);
+            g.text(this.font, Component.literal("§e" + place + ". §f" + e.name()
+                    + " §7— " + e.members() + " жит., " + e.score() + " очков"), cx - 150, y, WHITE);
             y += 14;
             place++;
         }
