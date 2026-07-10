@@ -45,11 +45,6 @@ public class CityScreen extends Screen {
             rebuildWidgets();
         }).bounds(this.width - 140, 12, 130, 20).build());
 
-        // Карта городов доступна всем, независимо от того, есть ли у игрока свой город.
-        addRenderableWidget(Button.builder(Component.literal("Карта"),
-                b -> CityActions.getMap())
-                .bounds(this.width - 140, 36, 130, 20).build());
-
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
         }

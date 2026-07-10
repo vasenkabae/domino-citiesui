@@ -30,5 +30,4 @@ public final class Protocol {
     public static final byte A_PROMOTE       = 12;
     public static final byte A_DEMOTE        = 13;
     public static final byte A_TRANSFER      = 14;
-    public static final byte A_GET_MAP       = 15;
 }

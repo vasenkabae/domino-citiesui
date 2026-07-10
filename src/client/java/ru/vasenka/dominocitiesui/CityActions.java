@@ -41,5 +41,4 @@ public final class CityActions {
     public static void promote(String uuid) { send(Protocol.A_PROMOTE, uuid); }
     public static void demote(String uuid)  { send(Protocol.A_DEMOTE, uuid); }
     public static void transfer(String uuid) { send(Protocol.A_TRANSFER, uuid); }
-    public static void getMap()             { send(Protocol.A_GET_MAP); }
 }
