@@ -37,11 +37,13 @@ public class CityScreen extends Screen {
             case MODE_ECONOMY -> "Топы →";
             default -> "← Мой город";
         };
+        // В правом верхнем углу — подальше от центрированного заголовка, чтобы не наезжать
+        // на него независимо от длины текста заголовка/названия города.
         addRenderableWidget(Button.builder(Component.literal(nextLabel), b -> {
             mode = (mode + 1) % 3;
             if (mode == MODE_TOP) CityActions.requestTop();
             rebuildWidgets();
-        }).bounds(cx + 30, 12, 130, 20).build());
+        }).bounds(this.width - 140, 12, 130, 20).build());
 
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
