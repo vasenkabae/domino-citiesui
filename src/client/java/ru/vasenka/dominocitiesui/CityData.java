@@ -21,6 +21,8 @@ public final class CityData {
         public boolean isOfficer() { return role == 1; }
     }
     public record TopEntry(String name, int members, long score) {}
+    public record CityInfo(String name, boolean open, String mayor, List<String> memberNames) {}
+    public record ResourceEntry(String material, int count) {}
 
     public static boolean protocolMismatch = false;
 
@@ -39,8 +41,14 @@ public final class CityData {
     public static String specialization = ""; // пусто = не выбрана
     public static int resourceStock = 0;
     public static final List<String> buffs = new ArrayList<>();
+    public static boolean open = false;
+    public static String mayorTitle = "Мэр";
+    public static String officerTitle = "Офицер";
+    public static String memberTitle = "Житель";
 
     public static final List<TopEntry> top = new ArrayList<>();
+    public static final List<CityInfo> directory = new ArrayList<>();
+    public static final List<ResourceEntry> resources = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -74,6 +82,10 @@ public final class CityData {
                 buffs.clear();
                 int buffCount = in.readInt();
                 for (int i = 0; i < buffCount; i++) buffs.add(in.readUTF());
+                open = in.readBoolean();
+                mayorTitle = in.readUTF();
+                officerTitle = in.readUTF();
+                memberTitle = in.readUTF();
             }
         } catch (Exception ignored) { /* битый пакет — молча */ }
         refresh();
@@ -99,6 +111,38 @@ public final class CityData {
             if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
             lastOk = in.readBoolean();
             lastResult = in.readUTF();
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onDirectory(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            directory.clear();
+            int cityCount = in.readInt();
+            for (int i = 0; i < cityCount; i++) {
+                String name = in.readUTF();
+                boolean cityOpen = in.readBoolean();
+                String mayor = in.readUTF();
+                int memberCount = in.readInt();
+                List<String> names = new ArrayList<>();
+                for (int j = 0; j < memberCount; j++) names.add(in.readUTF());
+                directory.add(new CityInfo(name, cityOpen, mayor, names));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onResources(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            resources.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                String material = in.readUTF();
+                int count = in.readInt();
+                resources.add(new ResourceEntry(material, count));
+            }
         } catch (Exception ignored) { }
         refresh();
     }

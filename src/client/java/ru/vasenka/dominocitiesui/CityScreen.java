@@ -7,15 +7,19 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Окно управления городом. Три секции: «Мой город», «Хозяйство» (баффы/специализация/сбор), «Топы».
+ * Окно управления городом. Четыре секции: «Мой город», «Хозяйство» (баффы/специализация/сбор/
+ * ресурсы в сундуках), «Все города» (справочник), «Топы».
  * Данные читает из {@link CityData}; при их обновлении сервером экран перестраивается.
  */
 public class CityScreen extends Screen {
 
-    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_TOP = 2;
+    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3;
+    private static final int MODE_COUNT = 4;
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
+    private EditBox titleInput;    // новое название роли (мэр)
+    private String pendingTitleText = "";
 
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
@@ -24,6 +28,7 @@ public class CityScreen extends Screen {
     /** Вызывается из CityData при получении свежих данных. */
     public void refresh() {
         if (input != null) pendingText = input.getValue();
+        if (titleInput != null) pendingTitleText = titleInput.getValue();
         rebuildWidgets();
     }
 
@@ -34,16 +39,18 @@ public class CityScreen extends Screen {
 
         String nextLabel = switch (mode) {
             case MODE_CITY -> "Хозяйство →";
-            case MODE_ECONOMY -> "Топы →";
+            case MODE_ECONOMY -> "Все города →";
+            case MODE_DIRECTORY -> "Топы →";
             default -> "← Мой город";
         };
         // В правом верхнем углу — подальше от центрированного заголовка, чтобы не наезжать
         // на него независимо от длины текста заголовка/названия города.
         addRenderableWidget(Button.builder(Component.literal(nextLabel), b -> {
-            mode = (mode + 1) % 3;
+            mode = (mode + 1) % MODE_COUNT;
             if (mode == MODE_TOP) CityActions.requestTop();
+            if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
             rebuildWidgets();
-        }).bounds(this.width - 140, 12, 130, 20).build());
+        }).bounds(this.width - 150, 12, 140, 20).build());
 
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
@@ -51,6 +58,8 @@ public class CityScreen extends Screen {
 
         if (mode == MODE_TOP) {
             initTop(cx, top);
+        } else if (mode == MODE_DIRECTORY) {
+            initDirectory(cx, top);
         } else if (!CityData.hasCity) {
             initNoCity(cx, top);
         } else if (mode == MODE_ECONOMY) {
@@ -99,7 +108,7 @@ public class CityScreen extends Screen {
 
         int by = top + 44 + shown * 18 + 8;
 
-        // Поле приглашения (для мэра и офицеров)
+        // Поле приглашения (для мэра и офицеров) — при открытом городе не нужно, но не мешает.
         if (CityData.isMayor || CityData.isOfficer) {
             input = new EditBox(this.font, cx - 150, by, 150, 20, Component.literal("Ник"));
             input.setMaxLength(16);
@@ -120,10 +129,33 @@ public class CityScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("Распустить город"),
                     b -> CityActions.disband())
                     .bounds(cx + 4, by, 150, 20).build());
+            addRenderableWidget(Button.builder(
+                    Component.literal(CityData.open ? "Сделать закрытым" : "Сделать открытым"),
+                    b -> CityActions.toggleOpen())
+                    .bounds(cx + 158, by, 150, 20).build());
         } else {
             addRenderableWidget(Button.builder(Component.literal("Покинуть город"),
                     b -> CityActions.leave())
                     .bounds(cx + 4, by, 150, 20).build());
+        }
+        by += 26;
+
+        // Переименование ролей — только мэр.
+        if (CityData.isMayor) {
+            titleInput = new EditBox(this.font, cx - 150, by, 150, 20, Component.literal("Новое название"));
+            titleInput.setMaxLength(16);
+            titleInput.setHint(Component.literal("Новое название роли"));
+            titleInput.setValue(pendingTitleText);
+            addRenderableWidget(titleInput);
+            addRenderableWidget(Button.builder(Component.literal(CityData.mayorTitle),
+                    b -> CityActions.setTitle((byte) 2, titleInput.getValue()))
+                    .bounds(cx + 4, by, 90, 20).build());
+            addRenderableWidget(Button.builder(Component.literal(CityData.officerTitle),
+                    b -> CityActions.setTitle((byte) 1, titleInput.getValue()))
+                    .bounds(cx + 98, by, 90, 20).build());
+            addRenderableWidget(Button.builder(Component.literal(CityData.memberTitle),
+                    b -> CityActions.setTitle((byte) 0, titleInput.getValue()))
+                    .bounds(cx + 192, by, 90, 20).build());
         }
     }
 
@@ -162,6 +194,18 @@ public class CityScreen extends Screen {
                 sy += 20;
             }
         }
+
+        // Ресурсы в сундуках — жёстко привязано ко дну экрана (список выше кнопки,
+        // кнопка выше строки результата на height-60), не зависит от переменной высоты блока выше.
+        addRenderableWidget(Button.builder(Component.literal("Показать сундуки"),
+                b -> CityActions.requestResources())
+                .bounds(cx - 75, this.height - 90, 150, 20).build());
+    }
+
+    private void initDirectory(int cx, int top) {
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestDirectory())
+                .bounds(cx - 60, this.height - 40, 120, 20).build());
     }
 
     private void initTop(int cx, int top) {
@@ -193,6 +237,8 @@ public class CityScreen extends Screen {
         int top = 40;
         if (mode == MODE_TOP) {
             renderTop(g, cx, top);
+        } else if (mode == MODE_DIRECTORY) {
+            renderDirectory(g, cx, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, GRAY);
             g.centeredText(this.font, Component.literal("§7Встань у своего Колокола и основай."), cx, top + 22, GRAY);
@@ -210,8 +256,9 @@ public class CityScreen extends Screen {
     }
 
     private void renderCity(GuiGraphicsExtractor g, int cx, int top) {
-        g.text(this.font, Component.literal("§6" + CityData.cityName), cx - 150, top, WHITE);
-        g.text(this.font, Component.literal("§7Мэр: §f" + CityData.mayorName), cx - 150, top + 12, WHITE);
+        String openTag = CityData.open ? "§a(открытый)" : "§c(закрытый)";
+        g.text(this.font, Component.literal("§6" + CityData.cityName + " " + openTag), cx - 150, top, WHITE);
+        g.text(this.font, Component.literal("§7" + CityData.mayorTitle + ": §f" + CityData.mayorName), cx - 150, top + 12, WHITE);
         g.text(this.font, Component.literal("§7Рейтинг: §f" + CityData.score
                 + "  §7Радиус: §f" + CityData.radius), cx - 150, top + 24, WHITE);
 
@@ -219,7 +266,8 @@ public class CityScreen extends Screen {
         int shown = Math.min(8, CityData.members.size());
         for (int i = 0; i < shown; i++) {
             CityData.Member m = CityData.members.get(i);
-            String tag = m.isMayor() ? " §6(мэр)" : m.isOfficer() ? " §b(офицер)" : "";
+            String tag = m.isMayor() ? " §6(" + CityData.mayorTitle + ")"
+                    : m.isOfficer() ? " §b(" + CityData.officerTitle + ")" : "";
             g.text(this.font, Component.literal("§f• " + m.name() + tag), cx - 150, y, WHITE);
             y += 18;
         }
@@ -253,6 +301,49 @@ public class CityScreen extends Screen {
             g.text(this.font, Component.literal("§7Выбери навсегда (кнопки ниже):"), cx - 150, y, GRAY);
         } else {
             g.text(this.font, Component.literal("§7Не выбрана — решает мэр."), cx - 150, y, GRAY);
+        }
+
+        // Сундуки — фиксированная зона над кнопкой "Показать сундуки" (height-90),
+        // с запасом не доходит до неё, чтобы список и кнопка не наезжали друг на друга.
+        int ry = this.height - 170;
+        g.text(this.font, Component.literal("§7Ресурсы в сундуках (загруженные чанки):"), cx - 150, ry, GRAY);
+        ry += 14;
+        if (CityData.resources.isEmpty()) {
+            g.text(this.font, Component.literal("§7(нажми «Показать сундуки»)"), cx - 150, ry, GRAY);
+        } else {
+            int shownRes = Math.min(4, CityData.resources.size());
+            for (int i = 0; i < shownRes; i++) {
+                CityData.ResourceEntry e = CityData.resources.get(i);
+                g.text(this.font, Component.literal("§f" + e.material() + " §7— " + e.count()), cx - 150, ry, WHITE);
+                ry += 12;
+            }
+            if (CityData.resources.size() > shownRes) {
+                g.text(this.font, Component.literal("§7… ещё " + (CityData.resources.size() - shownRes) + " видов"),
+                        cx - 150, ry, GRAY);
+            }
+        }
+    }
+
+    private void renderDirectory(GuiGraphicsExtractor g, int cx, int top) {
+        if (CityData.directory.isEmpty()) {
+            g.centeredText(this.font, Component.literal("§7Городов пока нет."), cx, top + 12, GRAY);
+            return;
+        }
+        int y = top;
+        int shown = Math.min(6, CityData.directory.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.CityInfo c = CityData.directory.get(i);
+            String tag = c.open() ? "§a(открыт)" : "§c(закрыт)";
+            g.text(this.font, Component.literal("§6" + c.name() + " " + tag + " §7— мэр " + c.mayor()), cx - 150, y, WHITE);
+            y += 12;
+            String members = String.join(", ", c.memberNames());
+            if (members.length() > 60) members = members.substring(0, 60) + "…";
+            g.text(this.font, Component.literal("§7  " + members), cx - 150, y, GRAY);
+            y += 16;
+        }
+        if (CityData.directory.size() > shown) {
+            g.text(this.font, Component.literal("§7… ещё " + (CityData.directory.size() - shown) + " городов"),
+                    cx - 150, y, GRAY);
         }
     }
 

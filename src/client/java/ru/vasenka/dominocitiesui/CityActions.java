@@ -41,4 +41,20 @@ public final class CityActions {
     public static void promote(String uuid) { send(Protocol.A_PROMOTE, uuid); }
     public static void demote(String uuid)  { send(Protocol.A_DEMOTE, uuid); }
     public static void transfer(String uuid) { send(Protocol.A_TRANSFER, uuid); }
+    public static void toggleOpen()         { send(Protocol.A_TOGGLE_OPEN); }
+    public static void requestDirectory()   { send(Protocol.A_REQUEST_DIRECTORY); }
+    public static void requestResources()   { send(Protocol.A_REQUEST_RESOURCES); }
+
+    public static void setTitle(byte role, String title) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_SET_TITLE);
+            out.writeByte(role);
+            out.writeUTF(title);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
 }

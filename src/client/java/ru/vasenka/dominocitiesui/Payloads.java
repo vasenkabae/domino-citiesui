@@ -51,4 +51,18 @@ public final class Payloads {
                 (buf, p) -> buf.writeBytes(p.data), buf -> new Result(readAll(buf)));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+
+    public record Directory(byte[] data) implements CustomPacketPayload {
+        public static final Type<Directory> TYPE = new Type<>(id(Protocol.CH_DIRECTORY));
+        public static final StreamCodec<FriendlyByteBuf, Directory> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBytes(p.data), buf -> new Directory(readAll(buf)));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    public record Resources(byte[] data) implements CustomPacketPayload {
+        public static final Type<Resources> TYPE = new Type<>(id(Protocol.CH_RESOURCES));
+        public static final StreamCodec<FriendlyByteBuf, Resources> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBytes(p.data), buf -> new Resources(readAll(buf)));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 }

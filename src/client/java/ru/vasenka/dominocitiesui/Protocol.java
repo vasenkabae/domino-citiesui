@@ -10,10 +10,12 @@ public final class Protocol {
     public static final int VERSION = 1;
 
     public static final String NS = "dominocities";
-    public static final String CH_ACTION = "action";
-    public static final String CH_STATE  = "state";
-    public static final String CH_TOP    = "top";
-    public static final String CH_RESULT = "result";
+    public static final String CH_ACTION    = "action";
+    public static final String CH_STATE     = "state";
+    public static final String CH_TOP       = "top";
+    public static final String CH_RESULT    = "result";
+    public static final String CH_DIRECTORY = "directory";
+    public static final String CH_RESOURCES = "resources";
 
     public static final byte A_REQUEST_STATE = 0;
     public static final byte A_REQUEST_TOP   = 1;
@@ -30,4 +32,8 @@ public final class Protocol {
     public static final byte A_PROMOTE       = 12;
     public static final byte A_DEMOTE        = 13;
     public static final byte A_TRANSFER      = 14;
+    public static final byte A_TOGGLE_OPEN   = 15;
+    public static final byte A_SET_TITLE     = 16;
+    public static final byte A_REQUEST_DIRECTORY = 17;
+    public static final byte A_REQUEST_RESOURCES = 18;
 }
