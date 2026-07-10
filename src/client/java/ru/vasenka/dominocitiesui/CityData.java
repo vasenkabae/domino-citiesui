@@ -15,7 +15,11 @@ import java.util.List;
 public final class CityData {
     private CityData() {}
 
-    public record Member(String uuid, String name, boolean mayor) {}
+    // role: 0 = житель, 1 = офицер, 2 = мэр
+    public record Member(String uuid, String name, byte role) {
+        public boolean isMayor() { return role == 2; }
+        public boolean isOfficer() { return role == 1; }
+    }
     public record TopEntry(String name, int members, long score) {}
 
     public static boolean protocolMismatch = false;
@@ -29,6 +33,7 @@ public final class CityData {
     public static int coreX = 0;
     public static int coreZ = 0;
     public static boolean isMayor = false;
+    public static boolean isOfficer = false;
     public static final List<Member> members = new ArrayList<>();
     public static long points = 0;
     public static String specialization = ""; // пусто = не выбрана
@@ -55,12 +60,13 @@ public final class CityData {
                 coreX = in.readInt();
                 coreZ = in.readInt();
                 isMayor = in.readBoolean();
+                isOfficer = in.readBoolean();
                 int n = in.readInt();
                 for (int i = 0; i < n; i++) {
                     String uuid = in.readUTF();
                     String name = in.readUTF();
-                    boolean mayor = in.readBoolean();
-                    members.add(new Member(uuid, name, mayor));
+                    byte role = in.readByte();
+                    members.add(new Member(uuid, name, role));
                 }
                 points = in.readLong();
                 specialization = in.readUTF();

@@ -45,6 +45,11 @@ public class CityScreen extends Screen {
             rebuildWidgets();
         }).bounds(this.width - 140, 12, 130, 20).build());
 
+        // Карта городов доступна всем, независимо от того, есть ли у игрока свой город.
+        addRenderableWidget(Button.builder(Component.literal("Карта"),
+                b -> CityActions.getMap())
+                .bounds(this.width - 140, 36, 130, 20).build());
+
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
         }
@@ -75,22 +80,32 @@ public class CityScreen extends Screen {
     private void initCity(int cx, int top) {
         int y = top + 44;
 
-        // Список жителей с кнопкой «Выгнать» для мэра
+        // Список жителей: кнопки управления зависят от роли смотрящего и роли цели.
         int shown = Math.min(8, CityData.members.size());
         for (int i = 0; i < shown; i++) {
             CityData.Member m = CityData.members.get(i);
-            if (CityData.isMayor && !m.mayor()) {
-                addRenderableWidget(Button.builder(Component.literal("Выгнать"),
-                        b -> { CityActions.kick(m.uuid()); })
-                        .bounds(cx + 60, y - 2, 70, 16).build());
+            boolean canKick = !m.isMayor() && (CityData.isMayor || (CityData.isOfficer && !m.isOfficer()));
+            if (canKick) {
+                addRenderableWidget(Button.builder(Component.literal("Кик"),
+                        b -> CityActions.kick(m.uuid()))
+                        .bounds(cx + 55, y - 2, 45, 16).build());
+            }
+            if (CityData.isMayor && !m.isMayor()) {
+                String promoteLabel = m.isOfficer() ? "Понизить" : "Повысить";
+                addRenderableWidget(Button.builder(Component.literal(promoteLabel),
+                        b -> { if (m.isOfficer()) CityActions.demote(m.uuid()); else CityActions.promote(m.uuid()); })
+                        .bounds(cx + 103, y - 2, 70, 16).build());
+                addRenderableWidget(Button.builder(Component.literal("Мэру"),
+                        b -> CityActions.transfer(m.uuid()))
+                        .bounds(cx + 176, y - 2, 50, 16).build());
             }
             y += 18;
         }
 
         int by = top + 44 + shown * 18 + 8;
 
-        // Поле приглашения (для мэра)
-        if (CityData.isMayor) {
+        // Поле приглашения (для мэра и офицеров)
+        if (CityData.isMayor || CityData.isOfficer) {
             input = new EditBox(this.font, cx - 150, by, 150, 20, Component.literal("Ник"));
             input.setMaxLength(16);
             input.setHint(Component.literal("Ник игрока"));
@@ -209,7 +224,7 @@ public class CityScreen extends Screen {
         int shown = Math.min(8, CityData.members.size());
         for (int i = 0; i < shown; i++) {
             CityData.Member m = CityData.members.get(i);
-            String tag = m.mayor() ? " §6(мэр)" : "";
+            String tag = m.isMayor() ? " §6(мэр)" : m.isOfficer() ? " §b(офицер)" : "";
             g.text(this.font, Component.literal("§f• " + m.name() + tag), cx - 150, y, WHITE);
             y += 18;
         }

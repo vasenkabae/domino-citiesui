@@ -38,4 +38,8 @@ public final class CityActions {
     public static void buyBuff(String id)   { send(Protocol.A_BUY_BUFF, id); }
     public static void setSpecialization(String id) { send(Protocol.A_SET_SPEC, id); }
     public static void collect()            { send(Protocol.A_COLLECT); }
+    public static void promote(String uuid) { send(Protocol.A_PROMOTE, uuid); }
+    public static void demote(String uuid)  { send(Protocol.A_DEMOTE, uuid); }
+    public static void transfer(String uuid) { send(Protocol.A_TRANSFER, uuid); }
+    public static void getMap()             { send(Protocol.A_GET_MAP); }
 }
