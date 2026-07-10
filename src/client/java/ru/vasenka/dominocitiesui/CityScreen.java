@@ -90,9 +90,9 @@ public class CityScreen extends Screen {
                 addRenderableWidget(Button.builder(Component.literal(promoteLabel),
                         b -> { if (m.isOfficer()) CityActions.demote(m.uuid()); else CityActions.promote(m.uuid()); })
                         .bounds(cx + 103, y - 2, 70, 16).build());
-                addRenderableWidget(Button.builder(Component.literal("Мэру"),
+                addRenderableWidget(Button.builder(Component.literal("Передать права"),
                         b -> CityActions.transfer(m.uuid()))
-                        .bounds(cx + 176, y - 2, 50, 16).build());
+                        .bounds(cx + 176, y - 2, 120, 16).build());
             }
             y += 18;
         }
