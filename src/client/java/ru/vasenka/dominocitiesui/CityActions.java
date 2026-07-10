@@ -35,4 +35,7 @@ public final class CityActions {
     public static void kick(String uuid)    { send(Protocol.A_KICK, uuid); }
     public static void disband()            { send(Protocol.A_DISBAND); }
     public static void toggleBorder()       { send(Protocol.A_TOGGLE_BORDER); }
+    public static void buyBuff(String id)   { send(Protocol.A_BUY_BUFF, id); }
+    public static void setSpecialization(String id) { send(Protocol.A_SET_SPEC, id); }
+    public static void collect()            { send(Protocol.A_COLLECT); }
 }

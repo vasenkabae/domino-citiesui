@@ -7,12 +7,13 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Окно управления городом. Две секции: «Мой город» и «Топы».
+ * Окно управления городом. Три секции: «Мой город», «Хозяйство» (баффы/специализация/сбор), «Топы».
  * Данные читает из {@link CityData}; при их обновлении сервером экран перестраивается.
  */
 public class CityScreen extends Screen {
 
-    private boolean showTop = false;
+    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_TOP = 2;
+    private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
 
@@ -31,22 +32,29 @@ public class CityScreen extends Screen {
         int cx = this.width / 2;
         int top = 40;
 
-        // Переключатель секций
-        addRenderableWidget(Button.builder(
-                Component.literal(showTop ? "← Мой город" : "Топы городов →"),
-                b -> { showTop = !showTop; if (showTop) CityActions.requestTop(); rebuildWidgets(); })
-                .bounds(cx + 40, 12, 120, 20).build());
+        String nextLabel = switch (mode) {
+            case MODE_CITY -> "Хозяйство →";
+            case MODE_ECONOMY -> "Топы →";
+            default -> "← Мой город";
+        };
+        addRenderableWidget(Button.builder(Component.literal(nextLabel), b -> {
+            mode = (mode + 1) % 3;
+            if (mode == MODE_TOP) CityActions.requestTop();
+            rebuildWidgets();
+        }).bounds(cx + 30, 12, 130, 20).build());
 
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
         }
 
-        if (showTop) {
+        if (mode == MODE_TOP) {
             initTop(cx, top);
-        } else if (CityData.hasCity) {
-            initCity(cx, top);
-        } else {
+        } else if (!CityData.hasCity) {
             initNoCity(cx, top);
+        } else if (mode == MODE_ECONOMY) {
+            initEconomy(cx, top);
+        } else {
+            initCity(cx, top);
         }
     }
 
@@ -107,6 +115,38 @@ public class CityScreen extends Screen {
         }
     }
 
+    private void initEconomy(int cx, int top) {
+        int y = top + 30;
+
+        // Баффы: кнопка «Купить», если мэр, ещё не куплено и хватает очков.
+        for (Catalogs.Buff b : Catalogs.BUFFS) {
+            boolean bought = CityData.buffs.contains(b.id());
+            if (!bought && CityData.isMayor && CityData.points >= b.cost()) {
+                addRenderableWidget(Button.builder(Component.literal("Купить"),
+                        btn -> CityActions.buyBuff(b.id()))
+                        .bounds(cx + 60, y - 2, 90, 16).build());
+            }
+            y += 18;
+        }
+
+        y += 10;
+        if (!CityData.specialization.isEmpty()) {
+            if (CityData.isMayor && CityData.resourceStock > 0) {
+                addRenderableWidget(Button.builder(Component.literal("Собрать"),
+                        btn -> CityActions.collect())
+                        .bounds(cx - 150, y, 150, 20).build());
+            }
+        } else if (CityData.isMayor) {
+            int sy = y;
+            for (Catalogs.Spec s : Catalogs.SPECS) {
+                addRenderableWidget(Button.builder(Component.literal(s.displayName()),
+                        btn -> CityActions.setSpecialization(s.id()))
+                        .bounds(cx - 150, sy, 150, 18).build());
+                sy += 20;
+            }
+        }
+    }
+
     private void initTop(int cx, int top) {
         addRenderableWidget(Button.builder(Component.literal("Обновить топ"),
                 b -> CityActions.requestTop())
@@ -117,6 +157,7 @@ public class CityScreen extends Screen {
     // Цвета ARGB — обязателен альфа-канал 0xFF, иначе текст «прозрачный».
     private static final int WHITE = 0xFFFFFFFF;
     private static final int GRAY  = 0xFFAAAAAA;
+    private static final int GOLD  = 0xFFFFAA00;
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
@@ -133,13 +174,15 @@ public class CityScreen extends Screen {
         }
 
         int top = 40;
-        if (showTop) {
+        if (mode == MODE_TOP) {
             renderTop(g, cx, top);
-        } else if (CityData.hasCity) {
-            renderCity(g, cx, top);
-        } else {
+        } else if (!CityData.hasCity) {
             g.centeredText(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, GRAY);
             g.centeredText(this.font, Component.literal("§7Встань у своего Колокола и основай."), cx, top + 22, GRAY);
+        } else if (mode == MODE_ECONOMY) {
+            renderEconomy(g, cx, top);
+        } else {
+            renderCity(g, cx, top);
         }
 
         // Строка результата последнего действия
@@ -152,8 +195,8 @@ public class CityScreen extends Screen {
     private void renderCity(GuiGraphicsExtractor g, int cx, int top) {
         g.text(this.font, Component.literal("§6" + CityData.cityName), cx - 150, top, WHITE);
         g.text(this.font, Component.literal("§7Мэр: §f" + CityData.mayorName), cx - 150, top + 12, WHITE);
-        g.text(this.font, Component.literal("§7Радиус: §f" + CityData.radius
-                + "  §7Очки: §f" + CityData.score), cx - 150, top + 24, WHITE);
+        g.text(this.font, Component.literal("§7Рейтинг: §f" + CityData.score
+                + "  §7Радиус: §f" + CityData.radius), cx - 150, top + 24, WHITE);
 
         int y = top + 44;
         int shown = Math.min(8, CityData.members.size());
@@ -166,6 +209,33 @@ public class CityScreen extends Screen {
         if (CityData.members.size() > shown) {
             g.text(this.font, Component.literal("§7… ещё " + (CityData.members.size() - shown)),
                     cx - 150, y, GRAY);
+        }
+    }
+
+    private void renderEconomy(GuiGraphicsExtractor g, int cx, int top) {
+        g.text(this.font, Component.literal("§6Очки города: §f" + CityData.points), cx - 150, top, WHITE);
+        g.text(this.font, Component.literal("§7Баффы жителям (навсегда, платит мэр):"), cx - 150, top + 14, GRAY);
+
+        int y = top + 30;
+        for (Catalogs.Buff b : Catalogs.BUFFS) {
+            boolean bought = CityData.buffs.contains(b.id());
+            String status = bought ? "§a✔ куплено" : "§7" + b.cost() + " очков";
+            g.text(this.font, Component.literal("§f" + b.displayName() + " " + status), cx - 150, y, WHITE);
+            y += 18;
+        }
+
+        y += 10;
+        g.text(this.font, Component.literal("§7Специализация:"), cx - 150, y, GRAY);
+        y += 14;
+        if (!CityData.specialization.isEmpty()) {
+            g.text(this.font, Component.literal("§6" + Catalogs.specName(CityData.specialization)), cx - 150, y, GOLD);
+            y += 14;
+            g.text(this.font, Component.literal("§7Накоплено ресурсов: §f" + CityData.resourceStock),
+                    cx - 150, y, WHITE);
+        } else if (CityData.isMayor) {
+            g.text(this.font, Component.literal("§7Выбери навсегда (кнопки ниже):"), cx - 150, y, GRAY);
+        } else {
+            g.text(this.font, Component.literal("§7Не выбрана — решает мэр."), cx - 150, y, GRAY);
         }
     }
 

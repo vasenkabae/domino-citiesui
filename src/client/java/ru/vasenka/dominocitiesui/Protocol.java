@@ -24,4 +24,7 @@ public final class Protocol {
     public static final byte A_KICK          = 6;
     public static final byte A_DISBAND       = 7;
     public static final byte A_TOGGLE_BORDER = 8;
+    public static final byte A_BUY_BUFF      = 9;
+    public static final byte A_SET_SPEC      = 10;
+    public static final byte A_COLLECT       = 11;
 }

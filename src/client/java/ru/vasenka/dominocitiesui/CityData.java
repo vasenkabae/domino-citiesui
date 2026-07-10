@@ -30,6 +30,10 @@ public final class CityData {
     public static int coreZ = 0;
     public static boolean isMayor = false;
     public static final List<Member> members = new ArrayList<>();
+    public static long points = 0;
+    public static String specialization = ""; // пусто = не выбрана
+    public static int resourceStock = 0;
+    public static final List<String> buffs = new ArrayList<>();
 
     public static final List<TopEntry> top = new ArrayList<>();
 
@@ -58,6 +62,12 @@ public final class CityData {
                     boolean mayor = in.readBoolean();
                     members.add(new Member(uuid, name, mayor));
                 }
+                points = in.readLong();
+                specialization = in.readUTF();
+                resourceStock = in.readInt();
+                buffs.clear();
+                int buffCount = in.readInt();
+                for (int i = 0; i < buffCount; i++) buffs.add(in.readUTF());
             }
         } catch (Exception ignored) { /* битый пакет — молча */ }
         refresh();
