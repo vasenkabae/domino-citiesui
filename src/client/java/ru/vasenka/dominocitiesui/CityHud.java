@@ -27,10 +27,10 @@ public class CityHud implements HudElement {
 
     private boolean insideCity(LocalPlayer p) {
         if (!worldMatches(p.level().dimension(), CityData.coreWorld)) return false;
-        double dx = p.getX() - CityData.coreX;
-        double dz = p.getZ() - CityData.coreZ;
+        double dx = Math.abs(p.getX() - CityData.coreX);
+        double dz = Math.abs(p.getZ() - CityData.coreZ);
         double r = CityData.radius;
-        return dx * dx + dz * dz <= r * r;
+        return dx <= r && dz <= r;
     }
 
     /** Bukkit хранит имя папки мира ("world"/"world_nether"/"world_the_end"), клиент — ResourceKey измерения. */
