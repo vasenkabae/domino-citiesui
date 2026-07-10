@@ -23,6 +23,9 @@ public final class CityData {
     public record TopEntry(String name, int members, long score) {}
     public record CityInfo(String name, boolean open, String mayor, List<String> memberNames) {}
     public record ResourceEntry(String material, int count) {}
+    public record ContractInfo(String cityName, String requiredMaterial, int requiredAmount,
+                                String rewardMaterial, int rewardAmount,
+                                String world, int x, int y, int z) {}
 
     public static boolean protocolMismatch = false;
 
@@ -49,6 +52,7 @@ public final class CityData {
     public static final List<TopEntry> top = new ArrayList<>();
     public static final List<CityInfo> directory = new ArrayList<>();
     public static final List<ResourceEntry> resources = new ArrayList<>();
+    public static final List<ContractInfo> contracts = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -142,6 +146,25 @@ public final class CityData {
                 String material = in.readUTF();
                 int count = in.readInt();
                 resources.add(new ResourceEntry(material, count));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onContracts(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            contracts.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                String cityName = in.readUTF();
+                String reqMat = in.readUTF();
+                int reqAmt = in.readInt();
+                String rewMat = in.readUTF();
+                int rewAmt = in.readInt();
+                String world = in.readUTF();
+                int x = in.readInt(), y = in.readInt(), z = in.readInt();
+                contracts.add(new ContractInfo(cityName, reqMat, reqAmt, rewMat, rewAmt, world, x, y, z));
             }
         } catch (Exception ignored) { }
         refresh();

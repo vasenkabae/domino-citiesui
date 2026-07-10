@@ -65,4 +65,11 @@ public final class Payloads {
                 (buf, p) -> buf.writeBytes(p.data), buf -> new Resources(readAll(buf)));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+
+    public record Contracts(byte[] data) implements CustomPacketPayload {
+        public static final Type<Contracts> TYPE = new Type<>(id(Protocol.CH_CONTRACTS));
+        public static final StreamCodec<FriendlyByteBuf, Contracts> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBytes(p.data), buf -> new Contracts(readAll(buf)));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 }

@@ -7,14 +7,16 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Окно управления городом. Четыре секции: «Мой город», «Хозяйство» (баффы/специализация/сбор/
- * ресурсы в сундуках), «Все города» (справочник), «Топы».
+ * Окно управления городом. Пять секций, все доступны сразу через вкладки сверху: «Мой город»,
+ * «Хозяйство» (баффы/специализация/сбор/ресурсы в сундуках), «Все города» (справочник), «Топы»,
+ * «Контракты» (доска объявлений всех городов).
  * Данные читает из {@link CityData}; при их обновлении сервером экран перестраивается.
  */
 public class CityScreen extends Screen {
 
-    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3;
-    private static final int MODE_COUNT = 4;
+    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3, MODE_CONTRACTS = 4;
+    private static final int MODE_COUNT = 5;
+    private static final String[] TAB_LABELS = {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
@@ -35,22 +37,9 @@ public class CityScreen extends Screen {
     @Override
     protected void init() {
         int cx = this.width / 2;
-        int top = 40;
+        int top = 60;
 
-        String nextLabel = switch (mode) {
-            case MODE_CITY -> "Хозяйство →";
-            case MODE_ECONOMY -> "Все города →";
-            case MODE_DIRECTORY -> "Топы →";
-            default -> "← Мой город";
-        };
-        // В правом верхнем углу — подальше от центрированного заголовка, чтобы не наезжать
-        // на него независимо от длины текста заголовка/названия города.
-        addRenderableWidget(Button.builder(Component.literal(nextLabel), b -> {
-            mode = (mode + 1) % MODE_COUNT;
-            if (mode == MODE_TOP) CityActions.requestTop();
-            if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
-            rebuildWidgets();
-        }).bounds(this.width - 150, 12, 140, 20).build());
+        addTabBar();
 
         if (CityData.protocolMismatch) {
             return; // текст-предупреждение рисуется в render()
@@ -60,12 +49,33 @@ public class CityScreen extends Screen {
             initTop(cx, top);
         } else if (mode == MODE_DIRECTORY) {
             initDirectory(cx, top);
+        } else if (mode == MODE_CONTRACTS) {
+            initContracts(cx, top);
         } else if (!CityData.hasCity) {
             initNoCity(cx, top);
         } else if (mode == MODE_ECONOMY) {
             initEconomy(cx, top);
         } else {
             initCity(cx, top);
+        }
+    }
+
+    /** Все вкладки сразу в ряд — прямой переход по клику, без циклического «дальше». */
+    private void addTabBar() {
+        int tabWidth = Math.min(140, (this.width - 40) / MODE_COUNT);
+        int totalWidth = tabWidth * MODE_COUNT;
+        int startX = (this.width - totalWidth) / 2;
+        for (int i = 0; i < MODE_COUNT; i++) {
+            int m = i;
+            Button btn = Button.builder(Component.literal(TAB_LABELS[i]), b -> {
+                mode = m;
+                if (mode == MODE_TOP) CityActions.requestTop();
+                if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
+                if (mode == MODE_CONTRACTS) CityActions.requestContracts();
+                rebuildWidgets();
+            }).bounds(startX + i * tabWidth, 32, tabWidth - 2, 20).build();
+            btn.active = (mode != m); // текущая вкладка выглядит нажатой (неактивной)
+            addRenderableWidget(btn);
         }
     }
 
@@ -232,6 +242,12 @@ public class CityScreen extends Screen {
                 .bounds(cx - 60, this.height - 40, 120, 20).build());
     }
 
+    private void initContracts(int cx, int top) {
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestContracts())
+                .bounds(cx - 60, this.height - 40, 120, 20).build());
+    }
+
     // Новая система рендера 26.x: рисуем через GuiGraphicsExtractor.
     // Цвета ARGB — обязателен альфа-канал 0xFF, иначе текст «прозрачный».
     private static final int WHITE = 0xFFFFFFFF;
@@ -252,14 +268,16 @@ public class CityScreen extends Screen {
             return;
         }
 
-        int top = 40;
+        int top = 60;
         if (mode == MODE_TOP) {
             renderTop(g, cx, top);
         } else if (mode == MODE_DIRECTORY) {
             renderDirectory(g, cx, top);
+        } else if (mode == MODE_CONTRACTS) {
+            renderContracts(g, cx, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, GRAY);
-            g.centeredText(this.font, Component.literal("§7Встань у своего Колокола и основай."), cx, top + 22, GRAY);
+            g.centeredText(this.font, Component.literal("§7Введи название и нажми «Основать» — город появится там, где стоишь."), cx, top + 22, GRAY);
         } else if (mode == MODE_ECONOMY) {
             renderEconomy(g, cx, top);
         } else {
@@ -377,6 +395,32 @@ public class CityScreen extends Screen {
                     + " §7— " + e.members() + " жит., " + e.score() + " очков"), cx - 150, y, WHITE);
             y += 14;
             place++;
+        }
+    }
+
+    private void renderContracts(GuiGraphicsExtractor g, int cx, int top) {
+        if (CityData.contracts.isEmpty()) {
+            g.centeredText(this.font, Component.literal("§7Контрактов пока нет."), cx, top + 12, GRAY);
+            g.centeredText(this.font,
+                    Component.literal("§7/city contract create <материал> <кол-во> <награда> <кол-во>"),
+                    cx, top + 24, GRAY);
+            return;
+        }
+        int y = top;
+        int shown = Math.min(6, CityData.contracts.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.ContractInfo c = CityData.contracts.get(i);
+            g.text(this.font, Component.literal("§6" + c.cityName() + "§7: нужно §f" + c.requiredAmount()
+                    + "× " + c.requiredMaterial() + " §7→ награда §f" + c.rewardAmount()
+                    + "× " + c.rewardMaterial()), cx - 150, y, WHITE);
+            y += 12;
+            g.text(this.font, Component.literal("§7  сундук: " + c.world() + " " + c.x() + "/" + c.y() + "/" + c.z()),
+                    cx - 150, y, GRAY);
+            y += 16;
+        }
+        if (CityData.contracts.size() > shown) {
+            g.text(this.font, Component.literal("§7… ещё " + (CityData.contracts.size() - shown) + " контрактов"),
+                    cx - 150, y, GRAY);
         }
     }
 

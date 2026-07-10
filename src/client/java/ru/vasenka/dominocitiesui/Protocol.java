@@ -16,6 +16,7 @@ public final class Protocol {
     public static final String CH_RESULT    = "result";
     public static final String CH_DIRECTORY = "directory";
     public static final String CH_RESOURCES = "resources";
+    public static final String CH_CONTRACTS = "contracts";
 
     public static final byte A_REQUEST_STATE = 0;
     public static final byte A_REQUEST_TOP   = 1;
@@ -37,4 +38,5 @@ public final class Protocol {
     public static final byte A_REQUEST_DIRECTORY = 17;
     public static final byte A_REQUEST_RESOURCES = 18;
     public static final byte A_BUILD_ROAD        = 19;
+    public static final byte A_REQUEST_CONTRACTS = 20;
 }
