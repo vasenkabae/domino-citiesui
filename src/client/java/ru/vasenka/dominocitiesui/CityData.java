@@ -25,6 +25,9 @@ public final class CityData {
     public static String mayorName = "";
     public static int radius = 0;
     public static long score = 0;
+    public static String coreWorld = "";
+    public static int coreX = 0;
+    public static int coreZ = 0;
     public static boolean isMayor = false;
     public static final List<Member> members = new ArrayList<>();
 
@@ -44,6 +47,9 @@ public final class CityData {
                 mayorName = in.readUTF();
                 radius = in.readInt();
                 score = in.readLong();
+                coreWorld = in.readUTF();
+                coreX = in.readInt();
+                coreZ = in.readInt();
                 isMayor = in.readBoolean();
                 int n = in.readInt();
                 for (int i = 0; i < n; i++) {
