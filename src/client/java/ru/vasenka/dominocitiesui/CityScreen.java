@@ -129,15 +129,20 @@ public class CityScreen extends Screen {
             y += 18;
         }
 
-        y += 10;
+        y += 10; // здесь y совпадает с labelY в renderEconomy — важно для совпадения раскладки
+        // Под "Специализация:" в renderEconomy всегда идёт ровно N строк текста по 14px:
+        // 2 (заголовок + подсказка/название) или 3, если специализация выбрана (+ строка запаса).
+        int specTextLines = CityData.specialization.isEmpty() ? 2 : 3;
+        int buttonsY = y + specTextLines * 14;
+
         if (!CityData.specialization.isEmpty()) {
             if (CityData.isMayor && CityData.resourceStock > 0) {
                 addRenderableWidget(Button.builder(Component.literal("Собрать"),
                         btn -> CityActions.collect())
-                        .bounds(cx - 150, y, 150, 20).build());
+                        .bounds(cx - 150, buttonsY, 150, 20).build());
             }
         } else if (CityData.isMayor) {
-            int sy = y;
+            int sy = buttonsY;
             for (Catalogs.Spec s : Catalogs.SPECS) {
                 addRenderableWidget(Button.builder(Component.literal(s.displayName()),
                         btn -> CityActions.setSpecialization(s.id()))
