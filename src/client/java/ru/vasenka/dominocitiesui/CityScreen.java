@@ -200,6 +200,12 @@ public class CityScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Показать сундуки"),
                 b -> CityActions.requestResources())
                 .bounds(cx - 75, this.height - 90, 150, 20).build());
+
+        if (CityData.isMayor || CityData.isOfficer) {
+            addRenderableWidget(Button.builder(Component.literal("Проложить дорогу (земля)"),
+                    b -> CityActions.buildRoad())
+                    .bounds(cx - 90, this.height - 115, 180, 20).build());
+        }
     }
 
     private void initDirectory(int cx, int top) {

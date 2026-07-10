@@ -36,4 +36,5 @@ public final class Protocol {
     public static final byte A_SET_TITLE     = 16;
     public static final byte A_REQUEST_DIRECTORY = 17;
     public static final byte A_REQUEST_RESOURCES = 18;
+    public static final byte A_BUILD_ROAD        = 19;
 }

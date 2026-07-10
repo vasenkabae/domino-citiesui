@@ -44,6 +44,7 @@ public final class CityActions {
     public static void toggleOpen()         { send(Protocol.A_TOGGLE_OPEN); }
     public static void requestDirectory()   { send(Protocol.A_REQUEST_DIRECTORY); }
     public static void requestResources()   { send(Protocol.A_REQUEST_RESOURCES); }
+    public static void buildRoad()          { send(Protocol.A_BUILD_ROAD); }
 
     public static void setTitle(byte role, String title) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
