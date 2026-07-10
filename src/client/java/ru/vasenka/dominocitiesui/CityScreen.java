@@ -206,6 +206,18 @@ public class CityScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
                 b -> CityActions.requestDirectory())
                 .bounds(cx - 60, this.height - 40, 120, 20).build());
+
+        int y = top;
+        int shown = Math.min(6, CityData.directory.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.CityInfo c = CityData.directory.get(i);
+            if (c.open() && !c.name().equals(CityData.cityName)) {
+                addRenderableWidget(Button.builder(Component.literal("Вступить"),
+                        b -> CityActions.join(c.name()))
+                        .bounds(cx + 160, y - 2, 70, 18).build());
+            }
+            y += 28;
+        }
     }
 
     private void initTop(int cx, int top) {
