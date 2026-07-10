@@ -4,9 +4,13 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.resources.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 public class DominoCitiesUIClient implements ClientModInitializer {
@@ -45,5 +49,18 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 }
             }
         });
+
+        // HUD: подпись названия города над хотбаром, пока игрок в своём городе.
+        HudElementRegistry.attachElementBefore(VanillaHudElements.HOTBAR,
+                Identifier.fromNamespaceAndPath(Protocol.NS, "city_hud"), new CityHud());
+
+        // Периодически обновляем state (сервер сам присылает его только по действиям игрока —
+        // без опроса HUD не заметит, что игрока приняли/выгнали/распустили город кем-то другим).
+        int[] ticks = {0};
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) { ticks[0] = 0; return; }
+            if (ticks[0]++ % 100 == 0) CityActions.requestState();
+        });
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> CityActions.requestState());
     }
 }
