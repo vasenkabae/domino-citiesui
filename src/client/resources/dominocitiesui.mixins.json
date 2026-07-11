@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "ru.vasenka.dominocitiesui.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "TextureUrlCheckerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
