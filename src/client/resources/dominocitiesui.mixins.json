@@ -4,7 +4,8 @@
   "package": "ru.vasenka.dominocitiesui.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "TextureUrlCheckerMixin"
+    "TextureUrlCheckerMixin",
+    "NameTagVisibilityMixin"
   ],
   "injectors": {
     "defaultRequire": 1

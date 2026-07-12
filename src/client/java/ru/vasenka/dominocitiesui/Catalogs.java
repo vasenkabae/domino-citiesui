@@ -3,12 +3,11 @@ package ru.vasenka.dominocitiesui;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Зеркало серверных BuffCatalog/Specializations — только то, что нужно для отрисовки окна. */
+/** Зеркало серверного BuffCatalog — только то, что нужно для отрисовки окна. */
 public final class Catalogs {
     private Catalogs() {}
 
     public record Buff(String id, String displayName, long cost) {}
-    public record Spec(String id, String displayName) {}
 
     public static final List<Buff> BUFFS = List.of(
             new Buff("regen", "Регенерация", 300),
@@ -18,21 +17,9 @@ public final class Catalogs {
             new Buff("resistance", "Стойкость", 500)
     );
 
-    public static final List<Spec> SPECS = List.of(
-            new Spec("mining", "Шахтёрский"),
-            new Spec("farming", "Фермерский"),
-            new Spec("lumber", "Лесной"),
-            new Spec("fishing", "Рыболовный")
-    );
-
     public static Buff buff(String id) {
         for (Buff b : BUFFS) if (b.id().equals(id)) return b;
         return null;
-    }
-
-    public static String specName(String id) {
-        for (Spec s : SPECS) if (s.id().equals(id)) return s.displayName();
-        return id;
     }
 
     /** id — имя Bukkit Material (как шлётся по сети), displayName — для UI. Для контрактов. */

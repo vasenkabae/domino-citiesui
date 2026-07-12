@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * Окно управления городом. Шесть секций, все доступны сразу через вкладки сверху: «Мой город»,
- * «Хозяйство» (баффы/специализация/сбор/ресурсы в сундуках), «Все города» (справочник), «Топы»,
+ * «Хозяйство» (баффы/ресурсы в сундуках), «Все города» (справочник), «Топы»,
  * «Контракты» (доска объявлений всех городов), «Розыск» (заказ убийства/охота за головами).
  * Данные читает из {@link CityData}; при их обновлении сервером экран перестраивается.
  */
@@ -235,28 +235,6 @@ public class CityScreen extends Screen {
             y += 18;
         }
 
-        y += 10; // здесь y совпадает с labelY в renderEconomy — важно для совпадения раскладки
-        // Под "Специализация:" в renderEconomy всегда идёт ровно N строк текста по 14px:
-        // 2 (заголовок + подсказка/название) или 3, если специализация выбрана (+ строка запаса).
-        int specTextLines = CityData.specialization.isEmpty() ? 2 : 3;
-        int buttonsY = y + specTextLines * 14;
-
-        if (!CityData.specialization.isEmpty()) {
-            if (CityData.isMayor && CityData.resourceStock > 0) {
-                addRenderableWidget(Button.builder(Component.literal("Собрать"),
-                        btn -> CityActions.collect())
-                        .bounds(cx - 150, buttonsY, 150, 20).build());
-            }
-        } else if (CityData.isMayor) {
-            int sy = buttonsY;
-            for (Catalogs.Spec s : Catalogs.SPECS) {
-                addRenderableWidget(Button.builder(Component.literal(s.displayName()),
-                        btn -> CityActions.setSpecialization(s.id()))
-                        .bounds(cx - 150, sy, 150, 18).build());
-                sy += 20;
-            }
-        }
-
         // Ресурсы в сундуках — жёстко привязано ко дну экрана (список выше кнопки,
         // кнопка выше строки результата на height-60), не зависит от переменной высоты блока выше.
         addRenderableWidget(Button.builder(Component.literal("Показать сундуки"),
@@ -475,7 +453,6 @@ public class CityScreen extends Screen {
     // Цвета ARGB — обязателен альфа-канал 0xFF, иначе текст «прозрачный».
     private static final int WHITE = 0xFFFFFFFF;
     private static final int GRAY  = 0xFFAAAAAA;
-    private static final int GOLD  = 0xFFFFAA00;
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
@@ -548,20 +525,6 @@ public class CityScreen extends Screen {
             String status = bought ? "§a✔ куплено" : "§7" + b.cost() + " очков";
             g.text(this.font, Component.literal("§f" + b.displayName() + " " + status), cx - 150, y, WHITE);
             y += 18;
-        }
-
-        y += 10;
-        g.text(this.font, Component.literal("§7Специализация:"), cx - 150, y, GRAY);
-        y += 14;
-        if (!CityData.specialization.isEmpty()) {
-            g.text(this.font, Component.literal("§6" + Catalogs.specName(CityData.specialization)), cx - 150, y, GOLD);
-            y += 14;
-            g.text(this.font, Component.literal("§7Накоплено ресурсов: §f" + CityData.resourceStock),
-                    cx - 150, y, WHITE);
-        } else if (CityData.isMayor) {
-            g.text(this.font, Component.literal("§7Выбери навсегда (кнопки ниже):"), cx - 150, y, GRAY);
-        } else {
-            g.text(this.font, Component.literal("§7Не выбрана — решает мэр."), cx - 150, y, GRAY);
         }
 
         // Сундуки — фиксированная зона над кнопкой "Показать сундуки" (height-90),

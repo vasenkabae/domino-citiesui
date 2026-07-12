@@ -8,9 +8,13 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Player;
 import org.lwjgl.glfw.GLFW;
 
 public class DominoCitiesUIClient implements ClientModInitializer {
@@ -74,5 +78,13 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             if (ticks[0]++ % 100 == 0) CityActions.requestState();
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> CityActions.requestState());
+
+        // ПКМ по игроку — раскрыть его ник/город на несколько секунд (см. NameReveal + мискин рендера).
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (world.isClientSide() && hand == InteractionHand.MAIN_HAND && entity instanceof Player target) {
+                NameReveal.reveal(target);
+            }
+            return InteractionResult.PASS;
+        });
     }
 }

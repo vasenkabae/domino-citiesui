@@ -43,8 +43,6 @@ public final class CityData {
     public static boolean isOfficer = false;
     public static final List<Member> members = new ArrayList<>();
     public static long points = 0;
-    public static String specialization = ""; // пусто = не выбрана
-    public static int resourceStock = 0;
     public static final List<String> buffs = new ArrayList<>();
     public static boolean open = false;
     public static String mayorTitle = "Мэр";
@@ -85,8 +83,6 @@ public final class CityData {
                     members.add(new Member(uuid, name, role));
                 }
                 points = in.readLong();
-                specialization = in.readUTF();
-                resourceStock = in.readInt();
                 buffs.clear();
                 int buffCount = in.readInt();
                 for (int i = 0; i < buffCount; i++) buffs.add(in.readUTF());
