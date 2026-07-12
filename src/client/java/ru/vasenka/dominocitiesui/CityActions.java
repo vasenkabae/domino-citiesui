@@ -59,4 +59,32 @@ public final class CityActions {
         }
         ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
     }
+
+    public static void createContract(String requiredMaterial, int requiredAmount,
+                                       String rewardMaterial, int rewardAmount) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_CREATE_CONTRACT);
+            out.writeUTF(requiredMaterial);
+            out.writeInt(requiredAmount);
+            out.writeUTF(rewardMaterial);
+            out.writeInt(rewardAmount);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void takeContract(int contractId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_TAKE_CONTRACT);
+            out.writeInt(contractId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
 }

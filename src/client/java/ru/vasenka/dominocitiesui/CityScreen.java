@@ -22,6 +22,12 @@ public class CityScreen extends Screen {
     private String pendingText = "";
     private EditBox titleInput;    // новое название роли (мэр)
     private String pendingTitleText = "";
+    private int contractReqIndex = 0;   // индекс в Catalogs.RESOURCES — требуемый ресурс
+    private int contractRewIndex = 0;   // индекс в Catalogs.RESOURCES — ресурс награды
+    private EditBox contractReqAmount;
+    private String pendingContractReqAmount = "1";
+    private EditBox contractRewAmount;
+    private String pendingContractRewAmount = "1";
 
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
@@ -31,6 +37,8 @@ public class CityScreen extends Screen {
     public void refresh() {
         if (input != null) pendingText = input.getValue();
         if (titleInput != null) pendingTitleText = titleInput.getValue();
+        if (contractReqAmount != null) pendingContractReqAmount = contractReqAmount.getValue();
+        if (contractRewAmount != null) pendingContractRewAmount = contractRewAmount.getValue();
         rebuildWidgets();
     }
 
@@ -242,10 +250,69 @@ public class CityScreen extends Screen {
                 .bounds(cx - 60, this.height - 40, 120, 20).build());
     }
 
+    /** Заказ контракта — только у кого есть город; выполнить чужой контракт можно и без города. */
     private void initContracts(int cx, int top) {
+        if (CityData.hasCity) {
+            int y = top + 16;
+            addRenderableWidget(Button.builder(Component.literal("«"),
+                    b -> contractReqIndex = Math.floorMod(contractReqIndex - 1, Catalogs.RESOURCES.size()))
+                    .bounds(cx - 150, y, 18, 18).build());
+            addRenderableWidget(Button.builder(Component.literal("»"),
+                    b -> contractReqIndex = Math.floorMod(contractReqIndex + 1, Catalogs.RESOURCES.size()))
+                    .bounds(cx + 4, y, 18, 18).build());
+            contractReqAmount = new EditBox(this.font, cx + 26, y, 40, 18, Component.literal("Кол-во"));
+            contractReqAmount.setMaxLength(4);
+            contractReqAmount.setValue(pendingContractReqAmount);
+            addRenderableWidget(contractReqAmount);
+
+            y += 24;
+            addRenderableWidget(Button.builder(Component.literal("«"),
+                    b -> contractRewIndex = Math.floorMod(contractRewIndex - 1, Catalogs.RESOURCES.size()))
+                    .bounds(cx - 150, y, 18, 18).build());
+            addRenderableWidget(Button.builder(Component.literal("»"),
+                    b -> contractRewIndex = Math.floorMod(contractRewIndex + 1, Catalogs.RESOURCES.size()))
+                    .bounds(cx + 4, y, 18, 18).build());
+            contractRewAmount = new EditBox(this.font, cx + 26, y, 40, 18, Component.literal("Кол-во"));
+            contractRewAmount.setMaxLength(4);
+            contractRewAmount.setValue(pendingContractRewAmount);
+            addRenderableWidget(contractRewAmount);
+
+            y += 24;
+            addRenderableWidget(Button.builder(Component.literal("Заказать контракт"),
+                    b -> {
+                        int reqAmt = parseAmount(contractReqAmount.getValue());
+                        int rewAmt = parseAmount(contractRewAmount.getValue());
+                        if (reqAmt > 0 && rewAmt > 0) {
+                            CityActions.createContract(
+                                    Catalogs.RESOURCES.get(contractReqIndex).id(), reqAmt,
+                                    Catalogs.RESOURCES.get(contractRewIndex).id(), rewAmt);
+                        }
+                    })
+                    .bounds(cx - 150, y, 300, 20).build());
+        }
+
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
                 b -> CityActions.requestContracts())
                 .bounds(cx - 60, this.height - 40, 120, 20).build());
+
+        int y = contractsListTop(top);
+        int shown = Math.min(6, CityData.contracts.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.ContractInfo c = CityData.contracts.get(i);
+            addRenderableWidget(Button.builder(Component.literal("Взять"),
+                    b -> CityActions.takeContract(c.id()))
+                    .bounds(cx + 152, y, 55, 18).build());
+            y += 20;
+        }
+    }
+
+    /** Общая раскладка формы заказа — должна совпадать в initContracts и renderContracts. */
+    private int contractsListTop(int top) {
+        return (CityData.hasCity ? top + 16 + 24 + 24 + 26 : top + 24) + 6;
+    }
+
+    private static int parseAmount(String s) {
+        try { int v = Integer.parseInt(s.trim()); return v > 0 ? v : 0; } catch (Exception e) { return 0; }
     }
 
     // Новая система рендера 26.x: рисуем через GuiGraphicsExtractor.
@@ -399,24 +466,32 @@ public class CityScreen extends Screen {
     }
 
     private void renderContracts(GuiGraphicsExtractor g, int cx, int top) {
+        if (CityData.hasCity) {
+            g.text(this.font, Component.literal("§7Заказать: ресурсы берутся прямо из инвентаря."), cx - 150, top, GRAY);
+            int y = top + 16;
+            g.text(this.font, Component.literal("§fНужно: " + Catalogs.RESOURCES.get(contractReqIndex).displayName()),
+                    cx - 128, y + 5, WHITE);
+            y += 24;
+            g.text(this.font, Component.literal("§fНаграда: " + Catalogs.RESOURCES.get(contractRewIndex).displayName()),
+                    cx - 128, y + 5, WHITE);
+        } else {
+            g.text(this.font, Component.literal("§7Чтобы заказывать контракты, вступи в город."), cx - 150, top, GRAY);
+            g.text(this.font, Component.literal("§7Выполнять чужие контракты можно и без города."), cx - 150, top + 12, GRAY);
+        }
+
+        int y = contractsListTop(top);
         if (CityData.contracts.isEmpty()) {
-            g.centeredText(this.font, Component.literal("§7Контрактов пока нет."), cx, top + 12, GRAY);
-            g.centeredText(this.font,
-                    Component.literal("§7/city contract create <материал> <кол-во> <награда> <кол-во>"),
-                    cx, top + 24, GRAY);
+            g.text(this.font, Component.literal("§7Контрактов пока нет."), cx - 150, y, GRAY);
             return;
         }
-        int y = top;
         int shown = Math.min(6, CityData.contracts.size());
         for (int i = 0; i < shown; i++) {
             CityData.ContractInfo c = CityData.contracts.get(i);
+            String req = Catalogs.resourceName(c.requiredMaterial());
+            String rew = Catalogs.resourceName(c.rewardMaterial());
             g.text(this.font, Component.literal("§6" + c.cityName() + "§7: нужно §f" + c.requiredAmount()
-                    + "× " + c.requiredMaterial() + " §7→ награда §f" + c.rewardAmount()
-                    + "× " + c.rewardMaterial()), cx - 150, y, WHITE);
-            y += 12;
-            g.text(this.font, Component.literal("§7  сундук: " + c.world() + " " + c.x() + "/" + c.y() + "/" + c.z()),
-                    cx - 150, y, GRAY);
-            y += 16;
+                    + "× " + req + " §7→ награда §f" + c.rewardAmount() + "× " + rew), cx - 150, y + 4, WHITE);
+            y += 20;
         }
         if (CityData.contracts.size() > shown) {
             g.text(this.font, Component.literal("§7… ещё " + (CityData.contracts.size() - shown) + " контрактов"),

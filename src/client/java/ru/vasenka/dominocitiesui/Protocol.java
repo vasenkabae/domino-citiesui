@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     public static final String NS = "dominocities";
     public static final String CH_ACTION    = "action";
@@ -39,4 +39,6 @@ public final class Protocol {
     public static final byte A_REQUEST_RESOURCES = 18;
     public static final byte A_BUILD_ROAD        = 19;
     public static final byte A_REQUEST_CONTRACTS = 20;
+    public static final byte A_CREATE_CONTRACT   = 21;
+    public static final byte A_TAKE_CONTRACT     = 22;
 }

@@ -23,9 +23,8 @@ public final class CityData {
     public record TopEntry(String name, int members, long score) {}
     public record CityInfo(String name, boolean open, String mayor, List<String> memberNames) {}
     public record ResourceEntry(String material, int count) {}
-    public record ContractInfo(String cityName, String requiredMaterial, int requiredAmount,
-                                String rewardMaterial, int rewardAmount,
-                                String world, int x, int y, int z) {}
+    public record ContractInfo(int id, String cityName, String requiredMaterial, int requiredAmount,
+                                String rewardMaterial, int rewardAmount) {}
 
     public static boolean protocolMismatch = false;
 
@@ -157,14 +156,13 @@ public final class CityData {
             contracts.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
+                int id = in.readInt();
                 String cityName = in.readUTF();
                 String reqMat = in.readUTF();
                 int reqAmt = in.readInt();
                 String rewMat = in.readUTF();
                 int rewAmt = in.readInt();
-                String world = in.readUTF();
-                int x = in.readInt(), y = in.readInt(), z = in.readInt();
-                contracts.add(new ContractInfo(cityName, reqMat, reqAmt, rewMat, rewAmt, world, x, y, z));
+                contracts.add(new ContractInfo(id, cityName, reqMat, reqAmt, rewMat, rewAmt));
             }
         } catch (Exception ignored) { }
         refresh();
