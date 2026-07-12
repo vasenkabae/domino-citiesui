@@ -25,6 +25,9 @@ public final class CityData {
     public record ResourceEntry(String material, int count) {}
     public record ContractInfo(int id, String cityName, String requiredMaterial, int requiredAmount,
                                 String rewardMaterial, int rewardAmount) {}
+    public record BountyInfo(int id, String targetName, String rewardMaterial, int rewardAmount, boolean claimed) {}
+    /** Моя активная охота (если я — назначенный охотник на кого-то). hasCoords=false — ещё не раскрывалось. */
+    public record MyHunt(String targetName, boolean hasCoords, String world, int x, int y, int z, long lastRevealAt) {}
 
     public static boolean protocolMismatch = false;
 
@@ -52,6 +55,8 @@ public final class CityData {
     public static final List<CityInfo> directory = new ArrayList<>();
     public static final List<ResourceEntry> resources = new ArrayList<>();
     public static final List<ContractInfo> contracts = new ArrayList<>();
+    public static final List<BountyInfo> bounties = new ArrayList<>();
+    public static MyHunt myHunt = null; // null = сейчас ни за кем не охочусь
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -163,6 +168,38 @@ public final class CityData {
                 String rewMat = in.readUTF();
                 int rewAmt = in.readInt();
                 contracts.add(new ContractInfo(id, cityName, reqMat, reqAmt, rewMat, rewAmt));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onBounties(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            bounties.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                int id = in.readInt();
+                String targetName = in.readUTF();
+                String rewMat = in.readUTF();
+                int rewAmt = in.readInt();
+                boolean claimed = in.readBoolean();
+                bounties.add(new BountyInfo(id, targetName, rewMat, rewAmt, claimed));
+            }
+            boolean hasHunt = in.readBoolean();
+            if (hasHunt) {
+                String targetName = in.readUTF();
+                boolean hasCoords = in.readBoolean();
+                if (hasCoords) {
+                    String world = in.readUTF();
+                    int x = in.readInt(), y = in.readInt(), z = in.readInt();
+                    long lastRevealAt = in.readLong();
+                    myHunt = new MyHunt(targetName, true, world, x, y, z, lastRevealAt);
+                } else {
+                    myHunt = new MyHunt(targetName, false, "", 0, 0, 0, 0);
+                }
+            } else {
+                myHunt = null;
             }
         } catch (Exception ignored) { }
         refresh();

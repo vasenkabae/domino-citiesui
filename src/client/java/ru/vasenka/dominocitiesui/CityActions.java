@@ -46,6 +46,7 @@ public final class CityActions {
     public static void requestResources()   { send(Protocol.A_REQUEST_RESOURCES); }
     public static void buildRoad()          { send(Protocol.A_BUILD_ROAD); }
     public static void requestContracts()   { send(Protocol.A_REQUEST_CONTRACTS); }
+    public static void requestBounties()    { send(Protocol.A_REQUEST_BOUNTIES); }
 
     public static void setTitle(byte role, String title) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -82,6 +83,32 @@ public final class CityActions {
             out.writeInt(Protocol.VERSION);
             out.writeByte(Protocol.A_TAKE_CONTRACT);
             out.writeInt(contractId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void createBounty(String targetNick, String rewardMaterial, int rewardAmount) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_CREATE_BOUNTY);
+            out.writeUTF(targetNick);
+            out.writeUTF(rewardMaterial);
+            out.writeInt(rewardAmount);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void takeBounty(int bountyId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_TAKE_BOUNTY);
+            out.writeInt(bountyId);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

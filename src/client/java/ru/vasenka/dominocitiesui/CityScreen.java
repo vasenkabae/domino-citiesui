@@ -8,39 +8,50 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Окно управления городом. Пять секций, все доступны сразу через вкладки сверху: «Мой город»,
+ * Окно управления городом. Шесть секций, все доступны сразу через вкладки сверху: «Мой город»,
  * «Хозяйство» (баффы/специализация/сбор/ресурсы в сундуках), «Все города» (справочник), «Топы»,
- * «Контракты» (доска объявлений всех городов).
+ * «Контракты» (доска объявлений всех городов), «Розыск» (заказ убийства/охота за головами).
  * Данные читает из {@link CityData}; при их обновлении сервером экран перестраивается.
  */
 public class CityScreen extends Screen {
 
-    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3, MODE_CONTRACTS = 4;
-    private static final int MODE_COUNT = 5;
-    private static final String[] TAB_LABELS = {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты"};
+    private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3,
+            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5;
+    private static final int MODE_COUNT = 6;
+    private static final String[] TAB_LABELS =
+            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
     private EditBox titleInput;    // новое название роли (мэр)
     private String pendingTitleText = "";
-    private static final int CONTRACT_MATCH_ROWS = 3; // сколько результатов поиска показывать за раз
+
+    // ── Универсальный поиск-пикер ресурса (переиспользуется контрактами и розыском) ──
+    private static final int PICKER_MATCH_ROWS = 3; // сколько результатов поиска показывать за раз
+    // строка выбора (12) + строка поиска/кол-ва (20) + список совпадений + отступ
+    private static final int PICKER_BLOCK_H = 12 + 20 + PICKER_MATCH_ROWS * 16 + 6;
+    private static final int PICKER_BUTTON_H = 20;
+    private static final int PICKER_LIST_GAP = 6;
+    private final Map<String, EditBox> pickerSearch = new HashMap<>();
+    private final Map<String, EditBox> pickerAmount = new HashMap<>();
+    private final Map<String, String> pickerMaterial = new HashMap<>();       // null, пока не выбран кликом
+    private final Map<String, String> pendingPickerQuery = new HashMap<>();
+    private final Map<String, String> pendingPickerAmount = new HashMap<>();
+
+    // ── Контракты ──
     private static final int CONTRACT_FORM_TOP_MARGIN = 12;
-    // подпись+выбор (12) + строка поиска/кол-ва (20) + список совпадений + отступ
-    private static final int CONTRACT_PICKER_BLOCK_H = 12 + 20 + CONTRACT_MATCH_ROWS * 16 + 6;
-    private static final int CONTRACT_BUTTON_H = 20;
-    private static final int CONTRACT_LIST_GAP = 6;
-    private String contractReqMaterial;   // null, пока не выбран кликом по совпадению из поиска
-    private String contractRewMaterial;
-    private EditBox contractReqSearch, contractRewSearch;
-    private String pendingContractReqQuery = "";
-    private String pendingContractRewQuery = "";
-    private EditBox contractReqAmount;
-    private String pendingContractReqAmount = "1";
-    private EditBox contractRewAmount;
-    private String pendingContractRewAmount = "1";
+
+    // ── Розыск ──
+    private static final int BOUNTY_NICK_TOP = 12;
+    private static final int BOUNTY_NICK_ROW_H = 20 + 6; // поле ника + отступ до пикера
+    private static final int MY_HUNT_BLOCK_H = 3 * 12 + 6; // 3 строки текста + отступ
+    private EditBox bountyNickInput;
+    private String pendingBountyNick = "";
 
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
@@ -50,10 +61,9 @@ public class CityScreen extends Screen {
     public void refresh() {
         if (input != null) pendingText = input.getValue();
         if (titleInput != null) pendingTitleText = titleInput.getValue();
-        if (contractReqAmount != null) pendingContractReqAmount = contractReqAmount.getValue();
-        if (contractRewAmount != null) pendingContractRewAmount = contractRewAmount.getValue();
-        if (contractReqSearch != null) pendingContractReqQuery = contractReqSearch.getValue();
-        if (contractRewSearch != null) pendingContractRewQuery = contractRewSearch.getValue();
+        if (bountyNickInput != null) pendingBountyNick = bountyNickInput.getValue();
+        for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
+        for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
         // фокус и ввод, если игрок сейчас печатает — CityData уже обновлена и отрисуется в
         // любом случае (render читает её напрямую), а список кнопок подтянется на следующей
@@ -63,9 +73,10 @@ public class CityScreen extends Screen {
     }
 
     private boolean isTypingInField() {
-        return isFocused(input) || isFocused(titleInput)
-                || isFocused(contractReqSearch) || isFocused(contractRewSearch)
-                || isFocused(contractReqAmount) || isFocused(contractRewAmount);
+        if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)) return true;
+        for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
+        for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
+        return false;
     }
 
     private static boolean isFocused(EditBox box) {
@@ -89,6 +100,8 @@ public class CityScreen extends Screen {
             initDirectory(cx, top);
         } else if (mode == MODE_CONTRACTS) {
             initContracts(cx, top);
+        } else if (mode == MODE_BOUNTIES) {
+            initBounties(cx, top);
         } else if (!CityData.hasCity) {
             initNoCity(cx, top);
         } else if (mode == MODE_ECONOMY) {
@@ -110,6 +123,7 @@ public class CityScreen extends Screen {
                 if (mode == MODE_TOP) CityActions.requestTop();
                 if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
                 if (mode == MODE_CONTRACTS) CityActions.requestContracts();
+                if (mode == MODE_BOUNTIES) CityActions.requestBounties();
                 rebuildWidgets();
             }).bounds(startX + i * tabWidth, 32, tabWidth - 2, 20).build();
             btn.active = (mode != m); // текущая вкладка выглядит нажатой (неактивной)
@@ -284,18 +298,20 @@ public class CityScreen extends Screen {
     private void initContracts(int cx, int top) {
         if (CityData.hasCity) {
             int y = top + CONTRACT_FORM_TOP_MARGIN;
-            y = initResourcePicker(cx, y, true);
-            y = initResourcePicker(cx, y, false);
+            y = initResourcePicker(cx, y, "contractReq");
+            y = initResourcePicker(cx, y, "contractRew");
 
             addRenderableWidget(Button.builder(Component.literal("Заказать контракт"),
                     b -> {
-                        int reqAmt = parseAmount(contractReqAmount.getValue());
-                        int rewAmt = parseAmount(contractRewAmount.getValue());
-                        if (reqAmt > 0 && rewAmt > 0 && contractReqMaterial != null && contractRewMaterial != null) {
-                            CityActions.createContract(contractReqMaterial, reqAmt, contractRewMaterial, rewAmt);
+                        int reqAmt = pickerAmountValue("contractReq");
+                        int rewAmt = pickerAmountValue("contractRew");
+                        String reqMat = pickerMaterial.get("contractReq");
+                        String rewMat = pickerMaterial.get("contractRew");
+                        if (reqAmt > 0 && rewAmt > 0 && reqMat != null && rewMat != null) {
+                            CityActions.createContract(reqMat, reqAmt, rewMat, rewAmt);
                         }
                     })
-                    .bounds(cx - 150, y, 300, CONTRACT_BUTTON_H).build());
+                    .bounds(cx - 150, y, 300, PICKER_BUTTON_H).build());
         }
 
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
@@ -313,69 +329,146 @@ public class CityScreen extends Screen {
         }
     }
 
-    /** Строка поиска ресурса + количество. Список совпадений рисуется/кликается отдельно (renderMatchRows/handleMatchClick) — вживую, по текущему тексту поля, без пересборки виджетов на каждую нажатую клавишу. */
-    private int initResourcePicker(int cx, int y, boolean required) {
-        int rowY = y + 12; // верхние 12px — подпись с текущим выбором, рисуется в renderResourcePickerLabel
+    private int contractsListTop(int top) {
+        if (!CityData.hasCity) return top + 24 + PICKER_LIST_GAP; // две строки подсказки (12px) + отступ
+        return top + CONTRACT_FORM_TOP_MARGIN + 2 * PICKER_BLOCK_H + PICKER_BUTTON_H + PICKER_LIST_GAP;
+    }
+
+    /**
+     * Заказать розыск может кто угодно (не только житель города); ник цели — произвольный текст,
+     * награда выбирается тем же поиском-пикером, что и в контрактах.
+     */
+    private void initBounties(int cx, int top) {
+        int nickY = top + BOUNTY_NICK_TOP;
+        bountyNickInput = new EditBox(this.font, cx - 150, nickY, 300, 18, Component.literal("Ник цели"));
+        bountyNickInput.setMaxLength(16);
+        bountyNickInput.setValue(pendingBountyNick);
+        addRenderableWidget(bountyNickInput);
+
+        int pickerY = nickY + BOUNTY_NICK_ROW_H;
+        int afterPicker = initResourcePicker(cx, pickerY, "bountyReward");
+
+        addRenderableWidget(Button.builder(Component.literal("Заказать розыск"),
+                b -> {
+                    String nick = bountyNickInput.getValue().trim();
+                    int amount = pickerAmountValue("bountyReward");
+                    String material = pickerMaterial.get("bountyReward");
+                    if (!nick.isEmpty() && amount > 0 && material != null) {
+                        CityActions.createBounty(nick, material, amount);
+                    }
+                })
+                .bounds(cx - 150, afterPicker, 300, PICKER_BUTTON_H).build());
+
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestBounties())
+                .bounds(cx - 60, this.height - 40, 120, 20).build());
+
+        int y = bountyListTop(top);
+        int shown = Math.min(6, CityData.bounties.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.BountyInfo b = CityData.bounties.get(i);
+            if (!b.claimed()) {
+                addRenderableWidget(Button.builder(Component.literal("Взять"),
+                        btn -> CityActions.takeBounty(b.id()))
+                        .bounds(cx + 152, y, 55, 18).build());
+            }
+            y += 20;
+        }
+    }
+
+    private int bountyListTop(int top) {
+        int pickerY = top + BOUNTY_NICK_TOP + BOUNTY_NICK_ROW_H;
+        int afterPicker = pickerY + PICKER_BLOCK_H;
+        int afterButton = afterPicker + PICKER_BUTTON_H + PICKER_LIST_GAP;
+        return CityData.myHunt != null ? afterButton + MY_HUNT_BLOCK_H : afterButton;
+    }
+
+    // ── Универсальный поиск-пикер ресурса ──────────────────────────────────
+
+    /** Строка поиска ресурса + количество. Совпадения рисуются/кликаются отдельно (см. renderPickerMatches/handlePickerClick) — вживую, по текущему тексту поля, без пересборки виджетов на каждую нажатую клавишу. */
+    private int initResourcePicker(int cx, int y, String key) {
+        int rowY = y + 12; // верхние 12px — подпись с текущим выбором, рисуется в renderPickerLabel
         EditBox search = new EditBox(this.font, cx - 150, rowY, 130, 18, Component.literal("Поиск ресурса"));
         search.setMaxLength(30);
-        search.setValue(required ? pendingContractReqQuery : pendingContractRewQuery);
-        if (required) contractReqSearch = search; else contractRewSearch = search;
+        search.setValue(pendingPickerQuery.getOrDefault(key, ""));
+        pickerSearch.put(key, search);
         addRenderableWidget(search);
 
         EditBox amount = new EditBox(this.font, cx - 10, rowY, 40, 18, Component.literal("Кол-во"));
         amount.setMaxLength(4);
-        amount.setValue(required ? pendingContractReqAmount : pendingContractRewAmount);
-        if (required) contractReqAmount = amount; else contractRewAmount = amount;
+        amount.setValue(pendingPickerAmount.getOrDefault(key, "1"));
+        pickerAmount.put(key, amount);
         addRenderableWidget(amount);
 
-        return y + CONTRACT_PICKER_BLOCK_H;
+        return y + PICKER_BLOCK_H;
     }
 
     private record MatchRect(Catalogs.Resource resource, int x, int y, int w, int h) {}
 
-    /** Совпадения поиска для блока (required/reward) — читает EditBox ЖИВЬЁМ (getValue()), поэтому обновляется каждый кадр без rebuildWidgets(). Используется и рендером, и обработчиком клика — одна и та же геометрия. */
-    private List<MatchRect> contractMatchRects(int cx, int blockY, boolean required) {
-        EditBox box = required ? contractReqSearch : contractRewSearch;
+    /** Совпадения поиска для пикера — читает EditBox ЖИВЬЁМ (getValue()), поэтому обновляется каждый кадр без rebuildWidgets(). Используется и рендером, и обработчиком клика — одна и та же геометрия. */
+    private List<MatchRect> pickerMatchRects(int cx, int blockY, String key) {
+        EditBox box = pickerSearch.get(key);
         List<MatchRect> out = new ArrayList<>();
         if (box == null) return out;
         int matchY = blockY + 12 + 20;
-        for (Catalogs.Resource r : Catalogs.search(box.getValue(), CONTRACT_MATCH_ROWS)) {
+        for (Catalogs.Resource r : Catalogs.search(box.getValue(), PICKER_MATCH_ROWS)) {
             out.add(new MatchRect(r, cx - 150, matchY, 258, 16));
             matchY += 16;
         }
         return out;
     }
 
-    @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (!CityData.protocolMismatch && mode == MODE_CONTRACTS && CityData.hasCity) {
-            int cx = this.width / 2;
-            int y = 60 + CONTRACT_FORM_TOP_MARGIN;
-            if (handleMatchClick(event.x(), event.y(), cx, y, true)) return true;
-            y += CONTRACT_PICKER_BLOCK_H;
-            if (handleMatchClick(event.x(), event.y(), cx, y, false)) return true;
-        }
-        return super.mouseClicked(event, doubleClick);
+    private void renderPickerLabel(GuiGraphicsExtractor g, int cx, int y, String label, String key) {
+        String materialId = pickerMaterial.get(key);
+        String value = materialId == null ? "§cне выбран" : "§a" + Catalogs.resourceName(materialId);
+        g.text(this.font, Component.literal("§7" + label + ": " + value), cx - 150, y, WHITE);
     }
 
-    private boolean handleMatchClick(double mouseX, double mouseY, int cx, int blockY, boolean required) {
-        for (MatchRect m : contractMatchRects(cx, blockY, required)) {
+    /** Совпадения поиска — подсвечивает уже выбранный вариант, чтобы было видно, что клик засчитался. */
+    private void renderPickerMatches(GuiGraphicsExtractor g, int cx, int blockY, String key) {
+        String selected = pickerMaterial.get(key);
+        for (MatchRect m : pickerMatchRects(cx, blockY, key)) {
+            if (m.resource().id().equals(selected)) {
+                g.fill(m.x(), m.y(), m.x() + m.w(), m.y() + m.h(), 0x552ECC71);
+            }
+            g.text(this.font, Component.literal("§f" + m.resource().displayName()), m.x() + 4, m.y() + 4, WHITE);
+        }
+    }
+
+    private boolean handlePickerClick(double mouseX, double mouseY, int cx, int blockY, String key) {
+        for (MatchRect m : pickerMatchRects(cx, blockY, key)) {
             if (mouseX >= m.x() && mouseX < m.x() + m.w() && mouseY >= m.y() && mouseY < m.y() + m.h()) {
-                if (required) contractReqMaterial = m.resource().id(); else contractRewMaterial = m.resource().id();
+                pickerMaterial.put(key, m.resource().id());
                 return true;
             }
         }
         return false;
     }
 
-    /** Общая раскладка формы заказа — вычисляется теми же константами, что и initContracts, так что не может разойтись. */
-    private int contractsListTop(int top) {
-        if (!CityData.hasCity) return top + 24 + CONTRACT_LIST_GAP; // две строки подсказки (12px) + отступ
-        return top + CONTRACT_FORM_TOP_MARGIN + 2 * CONTRACT_PICKER_BLOCK_H + CONTRACT_BUTTON_H + CONTRACT_LIST_GAP;
+    private int pickerAmountValue(String key) {
+        EditBox box = pickerAmount.get(key);
+        return box != null ? parseAmount(box.getValue()) : 0;
     }
 
     private static int parseAmount(String s) {
         try { int v = Integer.parseInt(s.trim()); return v > 0 ? v : 0; } catch (Exception e) { return 0; }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (!CityData.protocolMismatch) {
+            int cx = this.width / 2;
+            if (mode == MODE_CONTRACTS && CityData.hasCity) {
+                int y = 60 + CONTRACT_FORM_TOP_MARGIN;
+                if (handlePickerClick(event.x(), event.y(), cx, y, "contractReq")) return true;
+                y += PICKER_BLOCK_H;
+                if (handlePickerClick(event.x(), event.y(), cx, y, "contractRew")) return true;
+            } else if (mode == MODE_BOUNTIES) {
+                int y = 60 + BOUNTY_NICK_TOP + BOUNTY_NICK_ROW_H;
+                if (handlePickerClick(event.x(), event.y(), cx, y, "bountyReward")) return true;
+            }
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     // Новая система рендера 26.x: рисуем через GuiGraphicsExtractor.
@@ -405,6 +498,8 @@ public class CityScreen extends Screen {
             renderDirectory(g, cx, top);
         } else if (mode == MODE_CONTRACTS) {
             renderContracts(g, cx, top);
+        } else if (mode == MODE_BOUNTIES) {
+            renderBounties(g, cx, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, Component.literal("§7У тебя пока нет города."), cx, top + 12, GRAY);
             g.centeredText(this.font, Component.literal("§7Введи название и нажми «Основать» — город появится там, где стоишь."), cx, top + 22, GRAY);
@@ -531,11 +626,11 @@ public class CityScreen extends Screen {
     private void renderContracts(GuiGraphicsExtractor g, int cx, int top) {
         if (CityData.hasCity) {
             int y = top + CONTRACT_FORM_TOP_MARGIN;
-            renderResourcePickerLabel(g, cx, y, "Нужно", contractReqMaterial);
-            renderMatchRows(g, cx, y, true);
-            y += CONTRACT_PICKER_BLOCK_H;
-            renderResourcePickerLabel(g, cx, y, "Награда", contractRewMaterial);
-            renderMatchRows(g, cx, y, false);
+            renderPickerLabel(g, cx, y, "Нужно", "contractReq");
+            renderPickerMatches(g, cx, y, "contractReq");
+            y += PICKER_BLOCK_H;
+            renderPickerLabel(g, cx, y, "Награда", "contractRew");
+            renderPickerMatches(g, cx, y, "contractRew");
         } else {
             g.text(this.font, Component.literal("§7Чтобы заказывать контракты, вступи в город."), cx - 150, top, GRAY);
             g.text(this.font, Component.literal("§7Выполнять чужие контракты можно и без города."), cx - 150, top + 12, GRAY);
@@ -546,27 +641,6 @@ public class CityScreen extends Screen {
             g.text(this.font, Component.literal("§7Контрактов пока нет."), cx - 150, y, GRAY);
             return;
         }
-        renderContractRows(g, cx, y);
-    }
-
-    private void renderResourcePickerLabel(GuiGraphicsExtractor g, int cx, int y, String label, String selectedMaterialId) {
-        String value = selectedMaterialId == null ? "§cне выбран" : "§a" + Catalogs.resourceName(selectedMaterialId);
-        g.text(this.font, Component.literal("§7" + label + ": " + value), cx - 150, y, WHITE);
-    }
-
-    /** Совпадения поиска — подсвечивает уже выбранный вариант, чтобы было видно, что клик засчитался. */
-    private void renderMatchRows(GuiGraphicsExtractor g, int cx, int blockY, boolean required) {
-        String selected = required ? contractReqMaterial : contractRewMaterial;
-        for (MatchRect m : contractMatchRects(cx, blockY, required)) {
-            if (m.resource().id().equals(selected)) {
-                g.fill(m.x(), m.y(), m.x() + m.w(), m.y() + m.h(), 0x552ECC71);
-            }
-            g.text(this.font, Component.literal("§f" + m.resource().displayName()), m.x() + 4, m.y() + 4, WHITE);
-        }
-    }
-
-    private void renderContractRows(GuiGraphicsExtractor g, int cx, int startY) {
-        int y = startY;
         int shown = Math.min(6, CityData.contracts.size());
         for (int i = 0; i < shown; i++) {
             CityData.ContractInfo c = CityData.contracts.get(i);
@@ -578,6 +652,47 @@ public class CityScreen extends Screen {
         }
         if (CityData.contracts.size() > shown) {
             g.text(this.font, Component.literal("§7… ещё " + (CityData.contracts.size() - shown) + " контрактов"),
+                    cx - 150, y, GRAY);
+        }
+    }
+
+    private void renderBounties(GuiGraphicsExtractor g, int cx, int top) {
+        g.text(this.font, Component.literal("§7Заказать розыск — ник цели + награда из инвентаря:"), cx - 150, top, GRAY);
+
+        int pickerY = top + BOUNTY_NICK_TOP + BOUNTY_NICK_ROW_H;
+        renderPickerLabel(g, cx, pickerY, "Награда", "bountyReward");
+        renderPickerMatches(g, cx, pickerY, "bountyReward");
+
+        int y = bountyListTop(top);
+
+        if (CityData.myHunt != null) {
+            CityData.MyHunt hunt = CityData.myHunt;
+            int hy = y - MY_HUNT_BLOCK_H;
+            g.text(this.font, Component.literal("§6[Розыск] §7Охотишься на: §f" + hunt.targetName()), cx - 150, hy, WHITE);
+            hy += 12;
+            String coordsLine = hunt.hasCoords()
+                    ? "§eПоследние координаты: " + hunt.world() + " " + hunt.x() + "/" + hunt.y() + "/" + hunt.z()
+                        + " §7(" + ((System.currentTimeMillis() - hunt.lastRevealAt()) / 60000) + " мин назад)"
+                    : "§7Координаты придут через 30 минут после взятия заказа.";
+            g.text(this.font, Component.literal(coordsLine), cx - 150, hy, WHITE);
+            hy += 12;
+            g.text(this.font, Component.literal("§cПогибнешь — заказ провалится и достанется другому."), cx - 150, hy, GRAY);
+        }
+
+        if (CityData.bounties.isEmpty()) {
+            g.text(this.font, Component.literal("§7Заказов пока нет."), cx - 150, y, GRAY);
+            return;
+        }
+        int shown = Math.min(6, CityData.bounties.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.BountyInfo b = CityData.bounties.get(i);
+            String status = b.claimed() ? "§cв розыске" : "§aсвободен";
+            g.text(this.font, Component.literal("§6" + b.targetName() + "§7: награда §f" + b.rewardAmount()
+                    + "× " + Catalogs.resourceName(b.rewardMaterial()) + " §7— " + status), cx - 150, y + 4, WHITE);
+            y += 20;
+        }
+        if (CityData.bounties.size() > shown) {
+            g.text(this.font, Component.literal("§7… ещё " + (CityData.bounties.size() - shown) + " заказов"),
                     cx - 150, y, GRAY);
         }
     }
