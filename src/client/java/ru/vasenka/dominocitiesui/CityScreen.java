@@ -54,7 +54,22 @@ public class CityScreen extends Screen {
         if (contractRewAmount != null) pendingContractRewAmount = contractRewAmount.getValue();
         if (contractReqSearch != null) pendingContractReqQuery = contractReqSearch.getValue();
         if (contractRewSearch != null) pendingContractRewQuery = contractRewSearch.getValue();
+        // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
+        // фокус и ввод, если игрок сейчас печатает — CityData уже обновлена и отрисуется в
+        // любом случае (render читает её напрямую), а список кнопок подтянется на следующей
+        // пересборке, когда поле перестанет быть в фокусе.
+        if (isTypingInField()) return;
         rebuildWidgets();
+    }
+
+    private boolean isTypingInField() {
+        return isFocused(input) || isFocused(titleInput)
+                || isFocused(contractReqSearch) || isFocused(contractRewSearch)
+                || isFocused(contractReqAmount) || isFocused(contractRewAmount);
+    }
+
+    private static boolean isFocused(EditBox box) {
+        return box != null && box.isFocused();
     }
 
     @Override
