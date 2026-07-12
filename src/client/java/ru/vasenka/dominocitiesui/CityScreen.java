@@ -4,8 +4,10 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,11 +32,11 @@ public class CityScreen extends Screen {
     private static final int CONTRACT_PICKER_BLOCK_H = 12 + 20 + CONTRACT_MATCH_ROWS * 16 + 6;
     private static final int CONTRACT_BUTTON_H = 20;
     private static final int CONTRACT_LIST_GAP = 6;
-    private String contractReqMaterial = Catalogs.RESOURCES.get(0).id();
-    private String contractRewMaterial = Catalogs.RESOURCES.get(1).id();
+    private String contractReqMaterial;   // null, пока не выбран кликом по совпадению из поиска
+    private String contractRewMaterial;
     private EditBox contractReqSearch, contractRewSearch;
-    private String pendingContractReqQuery = Catalogs.RESOURCES.get(0).displayName();
-    private String pendingContractRewQuery = Catalogs.RESOURCES.get(1).displayName();
+    private String pendingContractReqQuery = "";
+    private String pendingContractRewQuery = "";
     private EditBox contractReqAmount;
     private String pendingContractReqAmount = "1";
     private EditBox contractRewAmount;
@@ -274,7 +276,7 @@ public class CityScreen extends Screen {
                     b -> {
                         int reqAmt = parseAmount(contractReqAmount.getValue());
                         int rewAmt = parseAmount(contractRewAmount.getValue());
-                        if (reqAmt > 0 && rewAmt > 0) {
+                        if (reqAmt > 0 && rewAmt > 0 && contractReqMaterial != null && contractRewMaterial != null) {
                             CityActions.createContract(contractReqMaterial, reqAmt, contractRewMaterial, rewAmt);
                         }
                     })
@@ -296,11 +298,7 @@ public class CityScreen extends Screen {
         }
     }
 
-    /**
-     * Строка поиска ресурса + количество, с выпадающим списком совпадений под ней.
-     * Клик по совпадению фиксирует выбор (contractReq/RewMaterial) и вписывает название в поле поиска.
-     * Место под список совпадений всегда фиксировано (CONTRACT_MATCH_ROWS), чтобы раскладка не прыгала.
-     */
+    /** Строка поиска ресурса + количество. Список совпадений рисуется/кликается отдельно (renderMatchRows/handleMatchClick) — вживую, по текущему тексту поля, без пересборки виджетов на каждую нажатую клавишу. */
     private int initResourcePicker(int cx, int y, boolean required) {
         int rowY = y + 12; // верхние 12px — подпись с текущим выбором, рисуется в renderResourcePickerLabel
         EditBox search = new EditBox(this.font, cx - 150, rowY, 130, 18, Component.literal("Поиск ресурса"));
@@ -315,19 +313,44 @@ public class CityScreen extends Screen {
         if (required) contractReqAmount = amount; else contractRewAmount = amount;
         addRenderableWidget(amount);
 
-        int matchY = rowY + 20;
-        String query = required ? pendingContractReqQuery : pendingContractRewQuery;
-        List<Catalogs.Resource> matches = Catalogs.search(query, CONTRACT_MATCH_ROWS);
-        for (Catalogs.Resource r : matches) {
-            addRenderableWidget(Button.builder(Component.literal(r.displayName()),
-                    b -> {
-                        if (required) { contractReqMaterial = r.id(); contractReqSearch.setValue(r.displayName()); }
-                        else { contractRewMaterial = r.id(); contractRewSearch.setValue(r.displayName()); }
-                    })
-                    .bounds(cx - 150, matchY, 258, 16).build());
+        return y + CONTRACT_PICKER_BLOCK_H;
+    }
+
+    private record MatchRect(Catalogs.Resource resource, int x, int y, int w, int h) {}
+
+    /** Совпадения поиска для блока (required/reward) — читает EditBox ЖИВЬЁМ (getValue()), поэтому обновляется каждый кадр без rebuildWidgets(). Используется и рендером, и обработчиком клика — одна и та же геометрия. */
+    private List<MatchRect> contractMatchRects(int cx, int blockY, boolean required) {
+        EditBox box = required ? contractReqSearch : contractRewSearch;
+        List<MatchRect> out = new ArrayList<>();
+        if (box == null) return out;
+        int matchY = blockY + 12 + 20;
+        for (Catalogs.Resource r : Catalogs.search(box.getValue(), CONTRACT_MATCH_ROWS)) {
+            out.add(new MatchRect(r, cx - 150, matchY, 258, 16));
             matchY += 16;
         }
-        return y + CONTRACT_PICKER_BLOCK_H;
+        return out;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (!CityData.protocolMismatch && mode == MODE_CONTRACTS && CityData.hasCity) {
+            int cx = this.width / 2;
+            int y = 60 + CONTRACT_FORM_TOP_MARGIN;
+            if (handleMatchClick(event.x(), event.y(), cx, y, true)) return true;
+            y += CONTRACT_PICKER_BLOCK_H;
+            if (handleMatchClick(event.x(), event.y(), cx, y, false)) return true;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    private boolean handleMatchClick(double mouseX, double mouseY, int cx, int blockY, boolean required) {
+        for (MatchRect m : contractMatchRects(cx, blockY, required)) {
+            if (mouseX >= m.x() && mouseX < m.x() + m.w() && mouseY >= m.y() && mouseY < m.y() + m.h()) {
+                if (required) contractReqMaterial = m.resource().id(); else contractRewMaterial = m.resource().id();
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Общая раскладка формы заказа — вычисляется теми же константами, что и initContracts, так что не может разойтись. */
@@ -493,8 +516,11 @@ public class CityScreen extends Screen {
     private void renderContracts(GuiGraphicsExtractor g, int cx, int top) {
         if (CityData.hasCity) {
             int y = top + CONTRACT_FORM_TOP_MARGIN;
-            y = renderResourcePickerLabel(g, cx, y, "Нужно", contractReqMaterial);
+            renderResourcePickerLabel(g, cx, y, "Нужно", contractReqMaterial);
+            renderMatchRows(g, cx, y, true);
+            y += CONTRACT_PICKER_BLOCK_H;
             renderResourcePickerLabel(g, cx, y, "Награда", contractRewMaterial);
+            renderMatchRows(g, cx, y, false);
         } else {
             g.text(this.font, Component.literal("§7Чтобы заказывать контракты, вступи в город."), cx - 150, top, GRAY);
             g.text(this.font, Component.literal("§7Выполнять чужие контракты можно и без города."), cx - 150, top + 12, GRAY);
@@ -508,10 +534,20 @@ public class CityScreen extends Screen {
         renderContractRows(g, cx, y);
     }
 
-    private int renderResourcePickerLabel(GuiGraphicsExtractor g, int cx, int y, String label, String selectedMaterialId) {
-        g.text(this.font, Component.literal("§7" + label + ": §a" + Catalogs.resourceName(selectedMaterialId)),
-                cx - 150, y, WHITE);
-        return y + CONTRACT_PICKER_BLOCK_H;
+    private void renderResourcePickerLabel(GuiGraphicsExtractor g, int cx, int y, String label, String selectedMaterialId) {
+        String value = selectedMaterialId == null ? "§cне выбран" : "§a" + Catalogs.resourceName(selectedMaterialId);
+        g.text(this.font, Component.literal("§7" + label + ": " + value), cx - 150, y, WHITE);
+    }
+
+    /** Совпадения поиска — подсвечивает уже выбранный вариант, чтобы было видно, что клик засчитался. */
+    private void renderMatchRows(GuiGraphicsExtractor g, int cx, int blockY, boolean required) {
+        String selected = required ? contractReqMaterial : contractRewMaterial;
+        for (MatchRect m : contractMatchRects(cx, blockY, required)) {
+            if (m.resource().id().equals(selected)) {
+                g.fill(m.x(), m.y(), m.x() + m.w(), m.y() + m.h(), 0x552ECC71);
+            }
+            g.text(this.font, Component.literal("§f" + m.resource().displayName()), m.x() + 4, m.y() + 4, WHITE);
+        }
     }
 
     private void renderContractRows(GuiGraphicsExtractor g, int cx, int startY) {
