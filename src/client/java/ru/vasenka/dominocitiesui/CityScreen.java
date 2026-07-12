@@ -6,6 +6,8 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
+
 /**
  * Окно управления городом. Пять секций, все доступны сразу через вкладки сверху: «Мой город»,
  * «Хозяйство» (баффы/специализация/сбор/ресурсы в сундуках), «Все города» (справочник), «Топы»,
@@ -22,8 +24,17 @@ public class CityScreen extends Screen {
     private String pendingText = "";
     private EditBox titleInput;    // новое название роли (мэр)
     private String pendingTitleText = "";
-    private int contractReqIndex = 0;   // индекс в Catalogs.RESOURCES — требуемый ресурс
-    private int contractRewIndex = 0;   // индекс в Catalogs.RESOURCES — ресурс награды
+    private static final int CONTRACT_MATCH_ROWS = 3; // сколько результатов поиска показывать за раз
+    private static final int CONTRACT_FORM_TOP_MARGIN = 12;
+    // подпись+выбор (12) + строка поиска/кол-ва (20) + список совпадений + отступ
+    private static final int CONTRACT_PICKER_BLOCK_H = 12 + 20 + CONTRACT_MATCH_ROWS * 16 + 6;
+    private static final int CONTRACT_BUTTON_H = 20;
+    private static final int CONTRACT_LIST_GAP = 6;
+    private String contractReqMaterial = Catalogs.RESOURCES.get(0).id();
+    private String contractRewMaterial = Catalogs.RESOURCES.get(1).id();
+    private EditBox contractReqSearch, contractRewSearch;
+    private String pendingContractReqQuery = Catalogs.RESOURCES.get(0).displayName();
+    private String pendingContractRewQuery = Catalogs.RESOURCES.get(1).displayName();
     private EditBox contractReqAmount;
     private String pendingContractReqAmount = "1";
     private EditBox contractRewAmount;
@@ -39,6 +50,8 @@ public class CityScreen extends Screen {
         if (titleInput != null) pendingTitleText = titleInput.getValue();
         if (contractReqAmount != null) pendingContractReqAmount = contractReqAmount.getValue();
         if (contractRewAmount != null) pendingContractRewAmount = contractRewAmount.getValue();
+        if (contractReqSearch != null) pendingContractReqQuery = contractReqSearch.getValue();
+        if (contractRewSearch != null) pendingContractRewQuery = contractRewSearch.getValue();
         rebuildWidgets();
     }
 
@@ -253,42 +266,19 @@ public class CityScreen extends Screen {
     /** Заказ контракта — только у кого есть город; выполнить чужой контракт можно и без города. */
     private void initContracts(int cx, int top) {
         if (CityData.hasCity) {
-            int y = top + 16;
-            addRenderableWidget(Button.builder(Component.literal("«"),
-                    b -> contractReqIndex = Math.floorMod(contractReqIndex - 1, Catalogs.RESOURCES.size()))
-                    .bounds(cx - 150, y, 18, 18).build());
-            addRenderableWidget(Button.builder(Component.literal("»"),
-                    b -> contractReqIndex = Math.floorMod(contractReqIndex + 1, Catalogs.RESOURCES.size()))
-                    .bounds(cx + 4, y, 18, 18).build());
-            contractReqAmount = new EditBox(this.font, cx + 26, y, 40, 18, Component.literal("Кол-во"));
-            contractReqAmount.setMaxLength(4);
-            contractReqAmount.setValue(pendingContractReqAmount);
-            addRenderableWidget(contractReqAmount);
+            int y = top + CONTRACT_FORM_TOP_MARGIN;
+            y = initResourcePicker(cx, y, true);
+            y = initResourcePicker(cx, y, false);
 
-            y += 24;
-            addRenderableWidget(Button.builder(Component.literal("«"),
-                    b -> contractRewIndex = Math.floorMod(contractRewIndex - 1, Catalogs.RESOURCES.size()))
-                    .bounds(cx - 150, y, 18, 18).build());
-            addRenderableWidget(Button.builder(Component.literal("»"),
-                    b -> contractRewIndex = Math.floorMod(contractRewIndex + 1, Catalogs.RESOURCES.size()))
-                    .bounds(cx + 4, y, 18, 18).build());
-            contractRewAmount = new EditBox(this.font, cx + 26, y, 40, 18, Component.literal("Кол-во"));
-            contractRewAmount.setMaxLength(4);
-            contractRewAmount.setValue(pendingContractRewAmount);
-            addRenderableWidget(contractRewAmount);
-
-            y += 24;
             addRenderableWidget(Button.builder(Component.literal("Заказать контракт"),
                     b -> {
                         int reqAmt = parseAmount(contractReqAmount.getValue());
                         int rewAmt = parseAmount(contractRewAmount.getValue());
                         if (reqAmt > 0 && rewAmt > 0) {
-                            CityActions.createContract(
-                                    Catalogs.RESOURCES.get(contractReqIndex).id(), reqAmt,
-                                    Catalogs.RESOURCES.get(contractRewIndex).id(), rewAmt);
+                            CityActions.createContract(contractReqMaterial, reqAmt, contractRewMaterial, rewAmt);
                         }
                     })
-                    .bounds(cx - 150, y, 300, 20).build());
+                    .bounds(cx - 150, y, 300, CONTRACT_BUTTON_H).build());
         }
 
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
@@ -306,9 +296,44 @@ public class CityScreen extends Screen {
         }
     }
 
-    /** Общая раскладка формы заказа — должна совпадать в initContracts и renderContracts. */
+    /**
+     * Строка поиска ресурса + количество, с выпадающим списком совпадений под ней.
+     * Клик по совпадению фиксирует выбор (contractReq/RewMaterial) и вписывает название в поле поиска.
+     * Место под список совпадений всегда фиксировано (CONTRACT_MATCH_ROWS), чтобы раскладка не прыгала.
+     */
+    private int initResourcePicker(int cx, int y, boolean required) {
+        int rowY = y + 12; // верхние 12px — подпись с текущим выбором, рисуется в renderResourcePickerLabel
+        EditBox search = new EditBox(this.font, cx - 150, rowY, 130, 18, Component.literal("Поиск ресурса"));
+        search.setMaxLength(30);
+        search.setValue(required ? pendingContractReqQuery : pendingContractRewQuery);
+        if (required) contractReqSearch = search; else contractRewSearch = search;
+        addRenderableWidget(search);
+
+        EditBox amount = new EditBox(this.font, cx - 10, rowY, 40, 18, Component.literal("Кол-во"));
+        amount.setMaxLength(4);
+        amount.setValue(required ? pendingContractReqAmount : pendingContractRewAmount);
+        if (required) contractReqAmount = amount; else contractRewAmount = amount;
+        addRenderableWidget(amount);
+
+        int matchY = rowY + 20;
+        String query = required ? pendingContractReqQuery : pendingContractRewQuery;
+        List<Catalogs.Resource> matches = Catalogs.search(query, CONTRACT_MATCH_ROWS);
+        for (Catalogs.Resource r : matches) {
+            addRenderableWidget(Button.builder(Component.literal(r.displayName()),
+                    b -> {
+                        if (required) { contractReqMaterial = r.id(); contractReqSearch.setValue(r.displayName()); }
+                        else { contractRewMaterial = r.id(); contractRewSearch.setValue(r.displayName()); }
+                    })
+                    .bounds(cx - 150, matchY, 258, 16).build());
+            matchY += 16;
+        }
+        return y + CONTRACT_PICKER_BLOCK_H;
+    }
+
+    /** Общая раскладка формы заказа — вычисляется теми же константами, что и initContracts, так что не может разойтись. */
     private int contractsListTop(int top) {
-        return (CityData.hasCity ? top + 16 + 24 + 24 + 26 : top + 24) + 6;
+        if (!CityData.hasCity) return top + 24 + CONTRACT_LIST_GAP; // две строки подсказки (12px) + отступ
+        return top + CONTRACT_FORM_TOP_MARGIN + 2 * CONTRACT_PICKER_BLOCK_H + CONTRACT_BUTTON_H + CONTRACT_LIST_GAP;
     }
 
     private static int parseAmount(String s) {
@@ -467,13 +492,9 @@ public class CityScreen extends Screen {
 
     private void renderContracts(GuiGraphicsExtractor g, int cx, int top) {
         if (CityData.hasCity) {
-            g.text(this.font, Component.literal("§7Заказать: ресурсы берутся прямо из инвентаря."), cx - 150, top, GRAY);
-            int y = top + 16;
-            g.text(this.font, Component.literal("§fНужно: " + Catalogs.RESOURCES.get(contractReqIndex).displayName()),
-                    cx - 128, y + 5, WHITE);
-            y += 24;
-            g.text(this.font, Component.literal("§fНаграда: " + Catalogs.RESOURCES.get(contractRewIndex).displayName()),
-                    cx - 128, y + 5, WHITE);
+            int y = top + CONTRACT_FORM_TOP_MARGIN;
+            y = renderResourcePickerLabel(g, cx, y, "Нужно", contractReqMaterial);
+            renderResourcePickerLabel(g, cx, y, "Награда", contractRewMaterial);
         } else {
             g.text(this.font, Component.literal("§7Чтобы заказывать контракты, вступи в город."), cx - 150, top, GRAY);
             g.text(this.font, Component.literal("§7Выполнять чужие контракты можно и без города."), cx - 150, top + 12, GRAY);
@@ -484,6 +505,17 @@ public class CityScreen extends Screen {
             g.text(this.font, Component.literal("§7Контрактов пока нет."), cx - 150, y, GRAY);
             return;
         }
+        renderContractRows(g, cx, y);
+    }
+
+    private int renderResourcePickerLabel(GuiGraphicsExtractor g, int cx, int y, String label, String selectedMaterialId) {
+        g.text(this.font, Component.literal("§7" + label + ": §a" + Catalogs.resourceName(selectedMaterialId)),
+                cx - 150, y, WHITE);
+        return y + CONTRACT_PICKER_BLOCK_H;
+    }
+
+    private void renderContractRows(GuiGraphicsExtractor g, int cx, int startY) {
+        int y = startY;
         int shown = Math.min(6, CityData.contracts.size());
         for (int i = 0; i < shown; i++) {
             CityData.ContractInfo c = CityData.contracts.get(i);
