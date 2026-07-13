@@ -45,6 +45,41 @@ public final class CityActions {
     public static void buildRoad()          { send(Protocol.A_BUILD_ROAD); }
     public static void requestContracts()   { send(Protocol.A_REQUEST_CONTRACTS); }
     public static void requestBounties()    { send(Protocol.A_REQUEST_BOUNTIES); }
+    public static void requestMarket()      { send(Protocol.A_REQUEST_MARKET); }
+    public static void marketInterest(int listingId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_MARKET_INTEREST);
+            out.writeInt(listingId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+    public static void marketCancel(int listingId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_MARKET_CANCEL);
+            out.writeInt(listingId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+    public static void listItem(String priceText, int quantity) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_LIST_ITEM);
+            out.writeUTF(priceText);
+            out.writeInt(quantity);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
 
     public static void setTitle(byte role, String title) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();

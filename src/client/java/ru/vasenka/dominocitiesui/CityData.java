@@ -28,6 +28,14 @@ public final class CityData {
     public record BountyInfo(int id, String targetName, String rewardMaterial, int rewardAmount, boolean claimed) {}
     /** Моя активная охота (если я — назначенный охотник на кого-то). hasCoords=false — ещё не раскрывалось. */
     public record MyHunt(String targetName, boolean hasCoords, String world, int x, int y, int z, long lastRevealAt) {}
+    /**
+     * Лот рынка. item — уже разобранный на клиенте ItemStack (см. MarketItemDecoder), с зачарованиями и
+     * прочим NBT — рендерится как настоящий ванильный предмет (иконка + тултип). interestedNames заполнен,
+     * только если mine=true (свой лот) — иначе виден только interestedCount.
+     */
+    public record MarketListingInfo(int id, String sellerName, net.minecraft.world.item.ItemStack item,
+                                     String priceText, int interestedCount, boolean mine,
+                                     List<String> interestedNames) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -56,6 +64,7 @@ public final class CityData {
     public static final List<ContractInfo> contracts = new ArrayList<>();
     public static final List<BountyInfo> bounties = new ArrayList<>();
     public static MyHunt myHunt = null; // null = сейчас ни за кем не охочусь
+    public static final List<MarketListingInfo> market = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -204,6 +213,30 @@ public final class CityData {
                 }
             } else {
                 myHunt = null;
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onMarket(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
+            market.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                int id = in.readInt();
+                String sellerName = in.readUTF();
+                int itemLen = in.readInt();
+                byte[] itemBytes = new byte[itemLen];
+                in.readFully(itemBytes);
+                var item = MarketItemDecoder.decode(itemBytes);
+                String priceText = in.readUTF();
+                int interestedCount = in.readInt();
+                boolean mine = in.readBoolean();
+                List<String> names = new ArrayList<>();
+                if (mine) for (int j = 0; j < interestedCount; j++) names.add(in.readUTF());
+                market.add(new MarketListingInfo(id, sellerName, item, priceText, interestedCount, mine, names));
             }
         } catch (Exception ignored) { }
         refresh();

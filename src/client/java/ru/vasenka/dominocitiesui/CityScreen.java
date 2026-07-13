@@ -25,10 +25,10 @@ import java.util.Map;
 public class CityScreen extends Screen {
 
     private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3,
-            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5;
-    private static final int MODE_COUNT = 6;
+            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6;
+    private static final int MODE_COUNT = 7;
     private static final String[] TAB_LABELS =
-            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск"};
+            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
@@ -96,6 +96,15 @@ public class CityScreen extends Screen {
     private EditBox bountyNickInput;
     private String pendingBountyNick = "";
 
+    // ── Рынок ──
+    private static final int MARKET_FORM_TOP_MARGIN = 12;
+    private static final int MARKET_ROW_H = 20;
+    private static final int MARKET_GAP = 6;
+    private EditBox marketPriceInput;
+    private EditBox marketQuantityInput;
+    private String pendingMarketPrice = "";
+    private String pendingMarketQuantity = "1";
+
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
     }
@@ -105,6 +114,8 @@ public class CityScreen extends Screen {
         if (input != null) pendingText = input.getValue();
         if (titleInput != null) pendingTitleText = titleInput.getValue();
         if (bountyNickInput != null) pendingBountyNick = bountyNickInput.getValue();
+        if (marketPriceInput != null) pendingMarketPrice = marketPriceInput.getValue();
+        if (marketQuantityInput != null) pendingMarketQuantity = marketQuantityInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -116,7 +127,8 @@ public class CityScreen extends Screen {
     }
 
     private boolean isTypingInField() {
-        if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)) return true;
+        if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)
+                || isFocused(marketPriceInput) || isFocused(marketQuantityInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -142,6 +154,8 @@ public class CityScreen extends Screen {
             initContracts(top);
         } else if (mode == MODE_BOUNTIES) {
             initBounties(top);
+        } else if (mode == MODE_MARKET) {
+            initMarket(top);
         } else if (!CityData.hasCity) {
             initNoCity(top);
         } else if (mode == MODE_ECONOMY) {
@@ -176,6 +190,7 @@ public class CityScreen extends Screen {
         if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
         if (mode == MODE_BOUNTIES) CityActions.requestBounties();
+        if (mode == MODE_MARKET) CityActions.requestMarket();
         rebuildWidgets();
     }
 
@@ -412,6 +427,59 @@ public class CityScreen extends Screen {
         return CityData.myHunt != null ? afterButton + MY_HUNT_BLOCK_H : afterButton;
     }
 
+    /**
+     * Рынок: выставить любой предмет из руки (цена — свободный текст, количество — отдельное поле),
+     * без эскроу — предмет остаётся в инвентаре, сервер клонирует его в момент отправки формы.
+     */
+    private void initMarket(int top) {
+        int priceY = top + MARKET_FORM_TOP_MARGIN;
+        marketPriceInput = new EditBox(this.font, left(), priceY, right() - left() - 64, MARKET_ROW_H,
+                Component.literal("Цена"));
+        marketPriceInput.setMaxLength(64);
+        marketPriceInput.setHint(Component.literal("Цена (текст)"));
+        marketPriceInput.setValue(pendingMarketPrice);
+        addRenderableWidget(marketPriceInput);
+
+        marketQuantityInput = new EditBox(this.font, right() - 56, priceY, 56, MARKET_ROW_H,
+                Component.literal("Кол-во"));
+        marketQuantityInput.setMaxLength(3);
+        marketQuantityInput.setValue(pendingMarketQuantity);
+        addRenderableWidget(marketQuantityInput);
+
+        int buttonY = priceY + MARKET_ROW_H + MARKET_GAP;
+        addRenderableWidget(Button.builder(Component.literal("Выставить (предмет из руки)"),
+                b -> {
+                    String price = marketPriceInput.getValue().trim();
+                    int qty = parseAmount(marketQuantityInput.getValue());
+                    if (!price.isEmpty() && qty > 0) CityActions.listItem(price, qty);
+                })
+                .bounds(left(), buttonY, right() - left(), MARKET_ROW_H).build());
+
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestMarket())
+                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+
+        int y = marketListTop(top);
+        int shown = Math.min(6, CityData.market.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.MarketListingInfo l = CityData.market.get(i);
+            if (l.mine()) {
+                addRenderableWidget(Button.builder(Component.literal("Снять"),
+                        b -> CityActions.marketCancel(l.id()))
+                        .bounds(right() - 70, y, 70, 18).build());
+            } else {
+                addRenderableWidget(Button.builder(Component.literal("Купить"),
+                        b -> CityActions.marketInterest(l.id()))
+                        .bounds(right() - 55, y, 55, 18).build());
+            }
+            y += 20;
+        }
+    }
+
+    private int marketListTop(int top) {
+        return top + MARKET_FORM_TOP_MARGIN + MARKET_ROW_H + MARKET_GAP + MARKET_ROW_H + MARKET_GAP;
+    }
+
     // ── Универсальный поиск-пикер ресурса ──────────────────────────────────
 
     /** Строка поиска ресурса + количество. Совпадения рисуются/кликаются отдельно (см. renderPickerMatches/handlePickerClick) — вживую, по текущему тексту поля, без пересборки виджетов на каждую нажатую клавишу. */
@@ -593,6 +661,8 @@ public class CityScreen extends Screen {
             bgContracts(g, top, mouseX, mouseY);
         } else if (mode == MODE_BOUNTIES) {
             bgBounties(g, top, mouseX, mouseY);
+        } else if (mode == MODE_MARKET) {
+            bgMarket(g, top);
         } else if (!CityData.hasCity) {
             bgNoCity(g, top);
         } else if (mode == MODE_ECONOMY) {
@@ -702,6 +772,16 @@ public class CityScreen extends Screen {
         }
     }
 
+    private void bgMarket(GuiGraphicsExtractor g, int top) {
+        int y = marketListTop(top);
+        int shown = Math.min(6, CityData.market.size());
+        for (int i = 0; i < shown; i++) {
+            g.fill(left() - 6, y - 1, right() + 6, y + 18, CARD);
+            g.fill(left() - 6, y - 1, left() - 4, y + 18, GOLD);
+            y += 20;
+        }
+    }
+
     // ── Передний план: тексты (рисуется ПОВЕРХ виджетов) ────────────────────
 
     @Override
@@ -741,6 +821,8 @@ public class CityScreen extends Screen {
             renderContracts(g, top);
         } else if (mode == MODE_BOUNTIES) {
             renderBounties(g, top);
+        } else if (mode == MODE_MARKET) {
+            renderMarket(g, top, mouseX, mouseY);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, "У тебя пока нет города", cx(), top + 14, WHITE);
             g.centeredText(this.font, "Оснуй свой — прямо там, где стоишь", cx(), top + 28, GRAY);
@@ -942,6 +1024,38 @@ public class CityScreen extends Screen {
         }
         if (CityData.bounties.size() > shown) {
             g.text(this.font, "… ещё " + (CityData.bounties.size() - shown) + " заказов", left() + 4, y + 4, DIM);
+        }
+    }
+
+    private void renderMarket(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        g.text(this.font, "ВЫСТАВИТЬ ЛОТ — цена текстом, количество из предмета в руке", left(), top - 2, DIM);
+
+        int y = marketListTop(top);
+        if (CityData.market.isEmpty()) {
+            g.text(this.font, "Лотов пока нет", left(), y + 4, DIM);
+            return;
+        }
+        int shown = Math.min(6, CityData.market.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.MarketListingInfo l = CityData.market.get(i);
+            int iconX = left() + 2, iconY = y;
+            if (!l.item().isEmpty()) {
+                g.item(l.item(), iconX, iconY);
+                if (mouseX >= iconX && mouseX < iconX + 16 && mouseY >= iconY && mouseY < iconY + 16) {
+                    g.setTooltipForNextFrame(this.font, l.item(), mouseX, mouseY);
+                }
+            }
+            int nx = seg(g, iconX + 20, y + 4, l.sellerName() + "  ", GOLD_BRIGHT);
+            nx = seg(g, nx, y + 4, l.priceText(), WHITE);
+            if (l.mine()) {
+                String interest = l.interestedNames().isEmpty() ? "пока никто не отметился"
+                        : "интерес: " + String.join(", ", l.interestedNames());
+                g.text(this.font, interest, iconX + 20, y + 14, l.interestedCount() > 0 ? GREEN : DIM);
+            }
+            y += 20;
+        }
+        if (CityData.market.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.market.size() - shown) + " лотов", left() + 4, y + 4, DIM);
         }
     }
 
