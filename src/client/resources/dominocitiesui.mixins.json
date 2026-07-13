@@ -7,7 +7,6 @@
     "TextureUrlCheckerMixin",
     "NameTagVisibilityMixin",
     "AvatarNameVisibilityMixin",
-    "SkinDebugMixin",
     "SkinSecurityMixin"
   ],
   "injectors": {

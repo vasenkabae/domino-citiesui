@@ -10,28 +10,19 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.minecraft.SharedConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import org.lwjgl.glfw.GLFW;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class DominoCitiesUIClient implements ClientModInitializer {
 
     private static KeyMapping openKey;
-    private static final Logger LOGGER = LoggerFactory.getLogger("DominoCitiesUI/SkinDebug");
 
     @Override
     public void onInitializeClient() {
-        // ВРЕМЕННАЯ диагностика бага со скинами: проверяем, не форсирует ли клиент дефолтный
-        // скин для всех игроков через debug-флаг (см. SkinManager.get/createLookup).
-        LOGGER.info("[SkinDebug] SharedConstants.DEBUG_ENABLED={} DEBUG_DEFAULT_SKIN_OVERRIDE={} SNAPSHOT={}",
-                SharedConstants.DEBUG_ENABLED, SharedConstants.DEBUG_DEFAULT_SKIN_OVERRIDE, SharedConstants.SNAPSHOT);
-
         // Регистрация типов пакетов (иначе клиент не заявит каналы серверу и не примет их).
         PayloadTypeRegistry.serverboundPlay().register(Payloads.Action.TYPE, Payloads.Action.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.State.TYPE, Payloads.State.CODEC);
