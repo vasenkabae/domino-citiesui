@@ -30,6 +30,7 @@ public final class CityData {
     public record MyHunt(String targetName, boolean hasCoords, String world, int x, int y, int z, long lastRevealAt) {}
 
     public static boolean protocolMismatch = false;
+    public static int lastReceivedVersion = -1;
 
     public static boolean hasCity = false;
     public static String cityName = "";
@@ -61,7 +62,8 @@ public final class CityData {
 
     public static void onState(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             protocolMismatch = false;
             hasCity = in.readBoolean();
             members.clear();
@@ -97,7 +99,8 @@ public final class CityData {
 
     public static void onTop(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             top.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
@@ -112,7 +115,8 @@ public final class CityData {
 
     public static void onResult(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             lastOk = in.readBoolean();
             lastResult = in.readUTF();
         } catch (Exception ignored) { }
@@ -121,7 +125,8 @@ public final class CityData {
 
     public static void onDirectory(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             directory.clear();
             int cityCount = in.readInt();
             for (int i = 0; i < cityCount; i++) {
@@ -139,7 +144,8 @@ public final class CityData {
 
     public static void onResources(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             resources.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
@@ -153,7 +159,8 @@ public final class CityData {
 
     public static void onContracts(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             contracts.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
@@ -171,7 +178,8 @@ public final class CityData {
 
     public static void onBounties(byte[] data) {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
-            if (in.readInt() != Protocol.VERSION) { protocolMismatch = true; refresh(); return; }
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             bounties.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {

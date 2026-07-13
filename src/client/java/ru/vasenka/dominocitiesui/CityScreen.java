@@ -465,6 +465,9 @@ public class CityScreen extends Screen {
                     cx, this.height / 2 - 10, WHITE);
             g.centeredText(this.font, Component.literal("§7Обнови лаунчер Domino Craft."),
                     cx, this.height / 2 + 4, GRAY);
+            g.centeredText(this.font, Component.literal("§8клиент v" + Protocol.VERSION
+                            + ", получено v" + CityData.lastReceivedVersion),
+                    cx, this.height / 2 + 18, GRAY);
             return;
         }
 
