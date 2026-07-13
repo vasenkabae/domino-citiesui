@@ -142,6 +142,11 @@ public class CityScreen extends Screen {
     protected void init() {
         int top = CONTENT_TOP;
 
+        // Памятка сервера — маленький «?» над правым верхним углом панели.
+        addRenderableWidget(Button.builder(Component.literal("?"),
+                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new GuideScreen()))
+                .bounds(px2() - 18, 6, 18, 16).build());
+
         if (CityData.protocolMismatch) {
             return; // предупреждение рисуется в render()
         }

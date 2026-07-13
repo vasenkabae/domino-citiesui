@@ -82,6 +82,24 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> CityActions.requestState());
 
+        // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть залогиниться через
+        // DominoAuth), пока игрок не нажал «Больше не показывать». Если в момент срабатывания
+        // открыт другой экран (чат, инвентарь) — ждём, пока экрана не будет.
+        int[] guideDelay = {-1};
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            if (!GuideScreen.dismissed()) guideDelay[0] = 200;
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> guideDelay[0] = -1);
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) return;
+            if (guideDelay[0] > 0) {
+                guideDelay[0]--;
+            } else if (guideDelay[0] == 0 && client.screen == null) {
+                guideDelay[0] = -1;
+                client.setScreen(new GuideScreen());
+            }
+        });
+
         // ПКМ по игроку — раскрыть его ник/город на несколько секунд (см. NameReveal + мискин рендера).
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (world.isClientSide() && hand == InteractionHand.MAIN_HAND && entity instanceof Player target) {
