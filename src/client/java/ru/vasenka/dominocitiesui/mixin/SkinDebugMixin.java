@@ -31,7 +31,11 @@ public class SkinDebugMixin {
         UUID id = self.getProfile().id();
         if (!logged.add(id)) return;
         PlayerSkin skin = cir.getReturnValue();
-        LOGGER.info("[SkinDebug] {} ({}) -> texture={} secure={}",
-                self.getProfile().name(), id, skin.body().texturePath(), skin.secure());
+        var textures = self.getProfile().properties().get("textures");
+        String rawInfo = textures.isEmpty() ? "NO TEXTURES PROPERTY"
+                : textures.stream().map(p -> "len=" + p.value().length() + " sig=" + (p.signature() != null))
+                        .reduce((a, b) -> a + "; " + b).orElse("?");
+        LOGGER.info("[SkinDebug] {} ({}) -> texture={} secure={} rawProperty=[{}]",
+                self.getProfile().name(), id, skin.body().texturePath(), skin.secure(), rawInfo);
     }
 }
