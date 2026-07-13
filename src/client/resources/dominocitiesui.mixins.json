@@ -6,7 +6,8 @@
   "client": [
     "TextureUrlCheckerMixin",
     "NameTagVisibilityMixin",
-    "AvatarNameVisibilityMixin"
+    "AvatarNameVisibilityMixin",
+    "SkinDebugMixin"
   ],
   "injectors": {
     "defaultRequire": 1
