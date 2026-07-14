@@ -100,6 +100,33 @@ public final class CityActions {
     public static void requestCityMap() { send(Protocol.A_REQUEST_CITY_MAP); }
     public static void refreshMap()     { send(Protocol.A_REFRESH_MAP); }
 
+    public static void addMarker(String world, int x, int z, String name) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_ADD_MARKER);
+            out.writeUTF(world);
+            out.writeInt(x);
+            out.writeInt(z);
+            out.writeUTF(name);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void deleteMarker(int markerId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_DELETE_MARKER);
+            out.writeInt(markerId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
     public static void deleteLaw(int lawId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {

@@ -3,7 +3,9 @@ package ru.vasenka.dominocitiesui;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -12,11 +14,13 @@ import net.minecraft.world.level.Level;
 
 /**
  * Отдельная полноэкранная карта мира (клавиша Y, не часть K-меню — чтобы не захламлять его).
- * Схематичный (не текстурный) плоский снимок с сервера + границы городов и точка игрока
- * поверх векторно. Данные и текстура — {@link CityData}/{@link CityMapTexture}, тот же протокол,
- * что раньше использовался под вкладкой «Карта» внутри CityScreen.
+ * Схематичный (не текстурный) плоский снимок с сервера + зум/пан колесом и перетаскиванием,
+ * границы и названия городов, точки живых жителей своего города, личные метки (клик по карте).
  *
- * Визуальный стиль повторяет CityScreen/GuideScreen: тёмная стеклянная панель, золотые акценты.
+ * Зум/пан реализован через матрицу (pushMatrix/translate/scale) + enableScissor, а НЕ через
+ * доп. параметры blit — так не зависим от неоднозначной семантики multi-int оверлоада blit
+ * в этом форке: текстура всегда рисуется «как есть» (0,0 → полный размер), всё позиционирование
+ * и масштаб — снаружи, через уже проверенный (см. scaledText в CityScreen) матричный путь.
  */
 public class WorldMapScreen extends Screen {
 
@@ -33,10 +37,25 @@ public class WorldMapScreen extends Screen {
     private static final int CARD         = 0x2E000000;
     private static final int MAP_MINE_LINE  = 0xC0F2B94E;
     private static final int MAP_OTHER_LINE = 0x906FA0D0;
+    private static final int TEAMMATE_DOT = 0xFF6FB0E0;
+    private static final int MARKER_COLOR = 0xFFE0B040;
 
     private static final int PANEL_MARGIN = 20;
     private static final int CONTENT_TOP = 44;
     private static final int BOTTOM_MARGIN = 40;
+    private static final double MIN_ZOOM = 1.0, MAX_ZOOM = 8.0;
+    private static final double MARKER_CLICK_RADIUS = 6.0;
+
+    // ── Вид (зум/пан) — переживает rebuildWidgets(), сбрасывается только при новом открытии ──
+    private boolean viewInitialized = false;
+    private double viewCenterX, viewCenterZ;
+    private double zoomFactor = 1.0;
+
+    // ── Размещение метки: клик по карте → форма названия ──
+    private boolean placingMarker = false;
+    private Double pendingMarkerWorldX, pendingMarkerWorldZ;
+    private EditBox markerNameInput;
+    private String pendingMarkerName = "";
 
     public WorldMapScreen() {
         super(Component.literal("Карта мира"));
@@ -44,92 +63,265 @@ public class WorldMapScreen extends Screen {
 
     @Override
     protected void init() {
-        CityActions.requestCityMap();
+        if (pendingMarkerWorldX != null) { initMarkerForm(); return; }
 
         String label = CityData.mapInProgress ? "Идёт пересчёт…"
                 : CityData.mapCooldownSeconds > 0 ? "Обновить карту (" + CityData.mapCooldownSeconds + "с)"
                 : "Обновить карту";
         addRenderableWidget(Button.builder(Component.literal(label), b -> CityActions.refreshMap())
-                .bounds(this.width / 2 - 80, this.height - 32, 160, 20).build());
+                .bounds(this.width / 2 - 165, this.height - 32, 150, 20).build());
+
+        if (CityData.mapHasImage) {
+            String markLabel = placingMarker ? "Кликни по карте (Esc — отмена)" : "Поставить метку";
+            addRenderableWidget(Button.builder(Component.literal(markLabel), b -> {
+                placingMarker = !placingMarker;
+                rebuildWidgets();
+            }).bounds(this.width / 2 + 15, this.height - 32, placingMarker ? 230 : 150, 20).build());
+        }
     }
 
-    /** Вызывается из CityData при получении свежих данных. */
-    public void refresh() {
+    private void initMarkerForm() {
+        markerNameInput = new EditBox(this.font, this.width / 2 - 180, this.height - 32, 220, 20,
+                Component.literal("Название метки"));
+        markerNameInput.setMaxLength(32);
+        markerNameInput.setHint(Component.literal("Название метки (до 32)"));
+        markerNameInput.setValue(pendingMarkerName);
+        addRenderableWidget(markerNameInput);
+        addRenderableWidget(Button.builder(Component.literal("Поставить"), b -> {
+            String name = markerNameInput.getValue().trim();
+            if (!name.isEmpty()) {
+                CityActions.addMarker(CityData.mapWorld,
+                        (int) Math.round(pendingMarkerWorldX), (int) Math.round(pendingMarkerWorldZ), name);
+                cancelPendingMarker();
+            }
+        }).bounds(this.width / 2 + 46, this.height - 32, 80, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("Отмена"), b -> cancelPendingMarker())
+                .bounds(this.width / 2 + 132, this.height - 32, 70, 20).build());
+    }
+
+    private void cancelPendingMarker() {
+        pendingMarkerWorldX = null;
+        pendingMarkerWorldZ = null;
+        pendingMarkerName = "";
+        markerNameInput = null;
         rebuildWidgets();
     }
+
+    /** Вызывается из CityData при получении свежих данных — не рвём фокус, если игрок печатает. */
+    public void refresh() {
+        if (markerNameInput != null) pendingMarkerName = markerNameInput.getValue();
+        if (markerNameInput != null && markerNameInput.isFocused()) return;
+        rebuildWidgets();
+    }
+
+    // ── Геометрия панели/вьюпорта ────────────────────────────────────────────
 
     private int px1() { return PANEL_MARGIN; }
     private int px2() { return this.width - PANEL_MARGIN; }
     private int py1() { return PANEL_MARGIN; }
     private int py2() { return this.height - PANEL_MARGIN; }
 
-    /** Прямоугольник отображения картинки карты внутри панели (letterbox по аспекту). */
-    private record MapRect(double x, double y, double w, double h) {}
+    private int boxX1() { return px1() + 12; }
+    private int boxY1() { return py1() + CONTENT_TOP; }
+    private int boxX2() { return px2() - 12; }
+    private int boxY2() { return py2() - BOTTOM_MARGIN; }
+    private double boxCenterX() { return (boxX1() + boxX2()) / 2.0; }
+    private double boxCenterY() { return (boxY1() + boxY2()) / 2.0; }
 
-    private MapRect displayRect() {
-        double boxX1 = px1() + 12, boxY1 = py1() + CONTENT_TOP;
-        double boxX2 = px2() - 12, boxY2 = py2() - BOTTOM_MARGIN;
-        double boxW = boxX2 - boxX1, boxH = boxY2 - boxY1;
-        double imgW = Math.max(1, CityData.mapWidth), imgH = Math.max(1, CityData.mapHeight);
-        double scale = Math.min(boxW / imgW, boxH / imgH);
-        double dispW = imgW * scale, dispH = imgH * scale;
-        return new MapRect(boxX1 + (boxW - dispW) / 2, boxY1 + (boxH - dispH) / 2, dispW, dispH);
+    private boolean inBox(double sx, double sy) {
+        return sx >= boxX1() && sx < boxX2() && sy >= boxY1() && sy < boxY2();
     }
+
+    /** Пикселей экрана на 1 блок мира при текущем зуме (0, если карты ещё нет). */
+    private double pxPerBlock() {
+        if (!CityData.mapHasImage) return 0;
+        double worldSpanX = Math.max(1, CityData.mapWidth * (double) CityData.mapBlockSize);
+        double worldSpanZ = Math.max(1, CityData.mapHeight * (double) CityData.mapBlockSize);
+        double boxW = boxX2() - boxX1(), boxH = boxY2() - boxY1();
+        double fit = Math.min(boxW / worldSpanX, boxH / worldSpanZ);
+        return fit * zoomFactor;
+    }
+
+    private double worldToScreenX(double wx) { return boxCenterX() + (wx - viewCenterX) * pxPerBlock(); }
+    private double worldToScreenZ(double wz) { return boxCenterY() + (wz - viewCenterZ) * pxPerBlock(); }
+    private double screenToWorldX(double sx) { return viewCenterX + (sx - boxCenterX()) / pxPerBlock(); }
+    private double screenToWorldZ(double sy) { return viewCenterZ + (sy - boxCenterY()) / pxPerBlock(); }
+
+    private void ensureViewInitialized() {
+        if (viewInitialized || !CityData.mapHasImage) return;
+        viewInitialized = true;
+        var player = Minecraft.getInstance().player;
+        if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
+            viewCenterX = player.getX();
+            viewCenterZ = player.getZ();
+        } else {
+            viewCenterX = CityData.mapMinX + CityData.mapWidth * CityData.mapBlockSize / 2.0;
+            viewCenterZ = CityData.mapMinZ + CityData.mapHeight * CityData.mapBlockSize / 2.0;
+        }
+        clampView();
+    }
+
+    private void clampView() {
+        zoomFactor = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomFactor));
+        if (!CityData.mapHasImage) return;
+        double spanX = CityData.mapWidth * (double) CityData.mapBlockSize;
+        double spanZ = CityData.mapHeight * (double) CityData.mapBlockSize;
+        viewCenterX = Math.max(CityData.mapMinX, Math.min(CityData.mapMinX + spanX, viewCenterX));
+        viewCenterZ = Math.max(CityData.mapMinZ, Math.min(CityData.mapMinZ + spanZ, viewCenterZ));
+    }
+
+    /** Ближайшая своя метка под курсором (в пределах MARKER_CLICK_RADIUS px) или null. */
+    private CityData.MarkerInfo findMarkerNear(double sx, double sy) {
+        CityData.MarkerInfo best = null;
+        double bestDist = MARKER_CLICK_RADIUS;
+        for (CityData.MarkerInfo m : CityData.mapMarkers) {
+            if (!m.world().equals(CityData.mapWorld)) continue;
+            double dx = worldToScreenX(m.x()) - sx, dz = worldToScreenZ(m.z()) - sy;
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < bestDist) { bestDist = dist; best = m; }
+        }
+        return best;
+    }
+
+    // ── Ввод: зум колесом, пан перетаскиванием, клик — метка/удаление ────────
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) return true;
+        if (!CityData.mapHasImage || !inBox(mouseX, mouseY) || scrollY == 0) return false;
+        zoomFactor *= Math.pow(1.2, scrollY);
+        clampView();
+        return true;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (super.mouseDragged(event, dragX, dragY)) return true;
+        if (!CityData.mapHasImage || event.button() != 0 || !inBox(event.x(), event.y())) return false;
+        double ppb = pxPerBlock();
+        if (ppb <= 0) return false;
+        viewCenterX -= dragX / ppb;
+        viewCenterZ -= dragY / ppb;
+        clampView();
+        return true;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (super.mouseClicked(event, doubleClick)) return true;
+        if (!CityData.mapHasImage || !inBox(event.x(), event.y())) return false;
+        if (event.button() == 1) {
+            CityData.MarkerInfo hit = findMarkerNear(event.x(), event.y());
+            if (hit != null) { CityActions.deleteMarker(hit.id()); return true; }
+            return false;
+        }
+        if (event.button() == 0 && placingMarker) {
+            pendingMarkerWorldX = screenToWorldX(event.x());
+            pendingMarkerWorldZ = screenToWorldZ(event.y());
+            placingMarker = false;
+            rebuildWidgets();
+            return true;
+        }
+        return false;
+    }
+
+    // ── Фон: панель + карта + границы городов + тиммейты + метки ────────────
 
     @Override
     public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(g, mouseX, mouseY, partialTick);
+        ensureViewInitialized();
 
         g.fillGradient(px1(), py1(), px2(), py2(), PANEL_TOP, PANEL_BOTTOM);
         g.outline(px1(), py1(), px2() - px1(), py2() - py1(), PANEL_EDGE);
-        g.horizontalLine(px1() + 1, px2() - 2, py1() + CONTENT_TOP - 10, GOLD_LINE);
-
-        MapRect r = displayRect();
-        g.fill((int) r.x() - 1, (int) r.y() - 1, (int) (r.x() + r.w()) + 1, (int) (r.y() + r.h()) + 1, CARD);
+        g.horizontalLine(px1() + 1, px2() - 2, boxY1() - 10, GOLD_LINE);
+        g.fill(boxX1() - 1, boxY1() - 1, boxX2() + 1, boxY2() + 1, CARD);
         if (!CityData.mapHasImage) return;
 
+        g.enableScissor(boxX1(), boxY1(), boxX2(), boxY2());
+
+        double ppb = pxPerBlock();
         Identifier tex = CityMapTexture.get(CityData.mapVersion);
-        if (tex != null) {
-            g.blit(RenderPipelines.GUI_TEXTURED, tex, (int) r.x(), (int) r.y(), 0f, 0f,
-                    (int) r.w(), (int) r.h(), CityMapTexture.width(), CityMapTexture.height(),
+        if (tex != null && ppb > 0) {
+            double scale = CityData.mapBlockSize * ppb;
+            double originX = worldToScreenX(CityData.mapMinX);
+            double originY = worldToScreenZ(CityData.mapMinZ);
+            var pose = g.pose();
+            pose.pushMatrix();
+            pose.translate((float) originX, (float) originY);
+            pose.scale((float) scale, (float) scale);
+            g.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0f, 0f,
+                    CityMapTexture.width(), CityMapTexture.height(),
                     CityMapTexture.width(), CityMapTexture.height());
+            pose.popMatrix();
         }
 
-        double scale = r.w() / Math.max(1, CityData.mapWidth);
         for (CityData.MapCityInfo c : CityData.mapCities) {
             if (!c.world().equals(CityData.mapWorld)) continue;
-            double imgX = (c.x() - CityData.mapMinX) / (double) CityData.mapBlockSize;
-            double imgZ = (c.z() - CityData.mapMinZ) / (double) CityData.mapBlockSize;
-            double imgR = c.radius() / (double) CityData.mapBlockSize;
-            int x1 = (int) (r.x() + (imgX - imgR) * scale), z1 = (int) (r.y() + (imgZ - imgR) * scale);
-            int x2 = (int) (r.x() + (imgX + imgR) * scale), z2 = (int) (r.y() + (imgZ + imgR) * scale);
+            int x1 = (int) worldToScreenX(c.x() - c.radius()), z1 = (int) worldToScreenZ(c.z() - c.radius());
+            int x2 = (int) worldToScreenX(c.x() + c.radius()), z2 = (int) worldToScreenZ(c.z() + c.radius());
             g.outline(x1, z1, Math.max(1, x2 - x1), Math.max(1, z2 - z1), c.mine() ? MAP_MINE_LINE : MAP_OTHER_LINE);
+        }
+
+        for (CityData.TeammateInfo t : CityData.mapTeammates) {
+            if (!t.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(t.x()), sy = (int) worldToScreenZ(t.z());
+            g.fill(sx - 2, sy - 2, sx + 2, sy + 2, TEAMMATE_DOT);
+        }
+
+        for (CityData.MarkerInfo m : CityData.mapMarkers) {
+            if (!m.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(m.x()), sy = (int) worldToScreenZ(m.z());
+            g.fill(sx - 1, sy - 5, sx + 1, sy + 1, MARKER_COLOR);
+            g.fill(sx - 3, sy - 5, sx + 3, sy - 3, MARKER_COLOR);
         }
 
         var player = Minecraft.getInstance().player;
         if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
-            double imgX = (player.getX() - CityData.mapMinX) / CityData.mapBlockSize;
-            double imgZ = (player.getZ() - CityData.mapMinZ) / CityData.mapBlockSize;
-            int px = (int) (r.x() + imgX * scale), pz = (int) (r.y() + imgZ * scale);
-            g.fill(px - 2, pz - 2, px + 2, pz + 2, 0xFFFFFFFF);
+            int sx = (int) worldToScreenX(player.getX()), sz = (int) worldToScreenZ(player.getZ());
+            g.fill(sx - 2, sz - 2, sx + 2, sz + 2, 0xFFFFFFFF);
         }
+
+        g.disableScissor();
     }
+
+    // ── Передний план: заголовок, подсказки, подписи городов/меток ──────────
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
         g.centeredText(this.font, "КАРТА МИРА", this.width / 2, py1() + 10, GOLD);
 
-        MapRect r = displayRect();
         if (!CityData.mapHasImage) {
-            g.centeredText(this.font, "Карта ещё не строилась", this.width / 2, (int) (r.y() + r.h() / 2) - 4, GRAY);
-            g.centeredText(this.font, "нажми «Обновить карту»", this.width / 2, (int) (r.y() + r.h() / 2) + 8, DIM);
-        } else if (CityMapTexture.get(CityData.mapVersion) == null) {
-            g.centeredText(this.font, "Загрузка изображения…", this.width / 2, (int) (r.y() + r.h() / 2), GRAY);
+            int cy = (boxY1() + boxY2()) / 2;
+            g.centeredText(this.font, "Карта ещё не строилась", this.width / 2, cy - 4, GRAY);
+            g.centeredText(this.font, "нажми «Обновить карту»", this.width / 2, cy + 8, DIM);
+            return;
         }
-        g.text(this.font, "серое — там ещё никто не бывал (карта не грузит мир сама)",
-                px1() + 12, py1() + CONTENT_TOP - 22, DIM);
-        g.text(this.font, "золотая рамка — твой город, синяя — чужие", px1() + 12, py1() + CONTENT_TOP - 10, DIM);
+        if (CityMapTexture.get(CityData.mapVersion) == null) {
+            g.centeredText(this.font, "Загрузка изображения…", this.width / 2, (boxY1() + boxY2()) / 2, GRAY);
+        }
+        g.text(this.font, "серое — там ещё никто не бывал  ·  колесо — зум, ЛКМ+тяни — двигать карту",
+                px1() + 12, boxY1() - 22, DIM);
+        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  ПКМ по метке — удалить",
+                px1() + 12, boxY1() - 10, DIM);
+
+        for (CityData.MapCityInfo c : CityData.mapCities) {
+            if (!c.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(c.x());
+            int topY = (int) worldToScreenZ(c.z() - c.radius()) - 10;
+            if (!inBox(sx, topY + 10) && !inBox(sx, (int) worldToScreenZ(c.z()))) continue;
+            g.centeredText(this.font, c.name(), sx, Math.max(boxY1() + 2, topY), c.mine() ? GOLD_BRIGHT : WHITE);
+        }
+
+        for (CityData.MarkerInfo m : CityData.mapMarkers) {
+            if (!m.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(m.x()), sy = (int) worldToScreenZ(m.z());
+            if (!inBox(sx, sy)) continue;
+            if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 8) {
+                g.text(this.font, m.name(), sx + 6, sy - 8, GOLD_BRIGHT);
+            }
+        }
     }
 
     /** Bukkit хранит имя папки мира ("world"/"world_nether"/"world_the_end"), клиент — ResourceKey измерения. */

@@ -46,6 +46,10 @@ public final class CityData {
     public record LawInfo(int id, String text, long createdAt) {}
     /** Контур города для мини-карты. */
     public record MapCityInfo(String name, String world, int x, int z, int radius, boolean mine) {}
+    /** Живая позиция онлайн-жителя своего города (не видно чужих городов). */
+    public record TeammateInfo(String name, String world, int x, int z) {}
+    /** Личная метка на карте — видна только владельцу. */
+    public record MarkerInfo(int id, String name, String world, int x, int z, long createdAt) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -95,6 +99,8 @@ public final class CityData {
     public static boolean mapInProgress = false;
     public static int mapCooldownSeconds = 0;
     public static final List<MapCityInfo> mapCities = new ArrayList<>();
+    public static final List<TeammateInfo> mapTeammates = new ArrayList<>();
+    public static final List<MarkerInfo> mapMarkers = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -346,6 +352,26 @@ public final class CityData {
                 int x = in.readInt(), z = in.readInt(), radius = in.readInt();
                 boolean mine = in.readBoolean();
                 mapCities.add(new MapCityInfo(name, world, x, z, radius, mine));
+            }
+
+            mapTeammates.clear();
+            int tn = in.readInt();
+            for (int i = 0; i < tn; i++) {
+                String tName = in.readUTF();
+                String tWorld = in.readUTF();
+                int tx = in.readInt(), tz = in.readInt();
+                mapTeammates.add(new TeammateInfo(tName, tWorld, tx, tz));
+            }
+
+            mapMarkers.clear();
+            int mn = in.readInt();
+            for (int i = 0; i < mn; i++) {
+                int id = in.readInt();
+                String mName = in.readUTF();
+                String mWorld = in.readUTF();
+                int mx = in.readInt(), mz = in.readInt();
+                long createdAt = in.readLong();
+                mapMarkers.add(new MarkerInfo(id, mName, mWorld, mx, mz, createdAt));
             }
         } catch (Exception ignored) { }
         refresh();

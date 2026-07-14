@@ -84,7 +84,19 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             while (mapKey.consumeClick()) {
                 if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
                     client.setScreen(new WorldMapScreen());
+                    CityActions.requestCityMap();
                 }
+            }
+        });
+
+        // Пока открыта карта мира — периодически опрашиваем сервер, чтобы точки жителей
+        // своего города и список личных меток оставались живыми (не только по открытию).
+        int[] mapTicks = {0};
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.screen instanceof WorldMapScreen && client.player != null) {
+                if (mapTicks[0]++ % 20 == 0) CityActions.requestCityMap();
+            } else {
+                mapTicks[0] = 0;
             }
         });
 
