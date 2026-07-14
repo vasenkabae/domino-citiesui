@@ -1667,7 +1667,7 @@ public class CityScreen extends Screen {
         if (CityMapTexture.get(CityData.mapVersion) == null) {
             g.centeredText(this.font, "Загрузка изображения…", cx(), (int) (r.y() + r.h() / 2), GRAY);
         }
-        g.text(this.font, "серое — ещё не исследовано игроками", left(), top + 12, DIM);
+        g.text(this.font, "серое — там ещё никто не бывал (карта не грузит мир сама)", left(), top + 12, DIM);
         chip(g, right() - 130, top + 10, "твой город", CHIP_GREEN_BG, GOLD_BRIGHT);
     }
 
