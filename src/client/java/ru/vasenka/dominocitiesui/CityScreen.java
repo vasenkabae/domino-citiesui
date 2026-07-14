@@ -117,7 +117,8 @@ public class CityScreen extends Screen {
     private static final int BUILDING_THUMB_W = 56, BUILDING_THUMB_H = 32;
     private static final int COMMENT_ROW_H = 34;
     private static final SimpleDateFormat BUILDING_DATE = new SimpleDateFormat("dd.MM.yyyy");
-    private static final int CARD_SUB_BUILDINGS = 0, CARD_SUB_COMMENTS = 1;
+    private static final int CARD_SUB_BUILDINGS = 0, CARD_SUB_COMMENTS = 1, CARD_SUB_LAWS = 2;
+    private static final int LAW_ROW_H = 24;
     private String selectedCity = null;    // null — показываем список городов
     private int selectedBuildingId = -1;   // -1 — список построек выбранного города
     private boolean buildingFormOpen = false;
@@ -126,6 +127,8 @@ public class CityScreen extends Screen {
     private int cardSubMode = CARD_SUB_BUILDINGS;
     private EditBox commentInput;
     private String pendingComment = "";
+    private EditBox lawInput;
+    private String pendingLaw = "";
     private EditBox mayorDescInput;
     private String pendingMayorDesc = "";
     private boolean mayorDescSeeded = false; // seed pendingMayorDesc from CityData.description ровно один раз
@@ -145,6 +148,7 @@ public class CityScreen extends Screen {
         if (buildingDescInput != null) pendingBuildingDesc = buildingDescInput.getValue();
         if (commentInput != null) pendingComment = commentInput.getValue();
         if (mayorDescInput != null) pendingMayorDesc = mayorDescInput.getValue();
+        if (lawInput != null) pendingLaw = lawInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -159,7 +163,7 @@ public class CityScreen extends Screen {
         if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)
                 || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
                 || isFocused(buildingNameInput) || isFocused(buildingDescInput)
-                || isFocused(commentInput) || isFocused(mayorDescInput)) return true;
+                || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -424,12 +428,16 @@ public class CityScreen extends Screen {
         // Подвкладки внутри карточки.
         addRenderableWidget(Button.builder(Component.literal("Постройки"),
                 b -> { cardSubMode = CARD_SUB_BUILDINGS; rebuildWidgets(); })
-                .bounds(right() - 176, top + CARD_TOOLBAR_TOP, 84, 16).build());
+                .bounds(right() - 262, top + CARD_TOOLBAR_TOP, 80, 16).build());
         addRenderableWidget(Button.builder(Component.literal("Комментарии"),
                 b -> { cardSubMode = CARD_SUB_COMMENTS; rebuildWidgets(); })
-                .bounds(right() - 88, top + CARD_TOOLBAR_TOP, 88, 16).build());
+                .bounds(right() - 178, top + CARD_TOOLBAR_TOP, 84, 16).build());
+        addRenderableWidget(Button.builder(Component.literal("Законы"),
+                b -> { cardSubMode = CARD_SUB_LAWS; rebuildWidgets(); })
+                .bounds(right() - 90, top + CARD_TOOLBAR_TOP, 90, 16).build());
 
         if (cardSubMode == CARD_SUB_COMMENTS) { initComments(top); return; }
+        if (cardSubMode == CARD_SUB_LAWS) { initLaws(top); return; }
 
         // Список построек: жителю своего города доступны рулетка и сохранение.
         if (selectedCity.equals(CityData.cityName)) {
@@ -476,6 +484,39 @@ public class CityScreen extends Screen {
                         .bounds(right() - 60, listY + 2, 60, 16).build());
             }
             listY += COMMENT_ROW_H;
+        }
+    }
+
+    private void initLaws(int top) {
+        int y = top + BUILDING_LIST_TOP;
+        boolean canEdit = selectedCity.equals(CityData.cityName) && CityData.cardCanEditLaws;
+        if (canEdit) {
+            lawInput = new EditBox(this.font, left(), y, right() - left() - 90, 20, Component.literal("Закон"));
+            lawInput.setMaxLength(100);
+            lawInput.setHint(Component.literal("Новый закон (до 100)"));
+            lawInput.setValue(pendingLaw);
+            addRenderableWidget(lawInput);
+            addRenderableWidget(Button.builder(Component.literal("Вписать"), b -> {
+                String text = lawInput.getValue().trim();
+                if (!text.isEmpty()) {
+                    CityActions.addLaw(text);
+                    pendingLaw = "";
+                    lawInput.setValue("");
+                }
+            }).bounds(right() - 84, y, 84, 20).build());
+            y += 26;
+        }
+
+        int listY = y;
+        int shown = Math.min(6, CityData.cardLaws.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.LawInfo l = CityData.cardLaws.get(i);
+            if (canEdit) {
+                addRenderableWidget(Button.builder(Component.literal("Убрать"),
+                        b -> CityActions.deleteLaw(l.id()))
+                        .bounds(right() - 56, listY + 1, 56, 16).build());
+            }
+            listY += LAW_ROW_H;
         }
     }
 
@@ -970,6 +1011,7 @@ public class CityScreen extends Screen {
         if (selectedBuildingId != -1) { bgBuildingDetail(g, top); return; }
 
         if (cardSubMode == CARD_SUB_COMMENTS) { bgComments(g, top, mouseX, mouseY); return; }
+        if (cardSubMode == CARD_SUB_LAWS) { bgLaws(g, top); return; }
 
         int y = top + BUILDING_LIST_TOP;
         int shown = Math.min(5, CityData.buildings.size());
@@ -1000,6 +1042,17 @@ public class CityScreen extends Screen {
             g.fill(left() - 6, y, right() + 6, y + COMMENT_ROW_H - 4, hover ? ROW_HOVER : CARD);
             g.fill(left() - 6, y, left() - 4, y + COMMENT_ROW_H - 4, BLUE);
             y += COMMENT_ROW_H;
+        }
+    }
+
+    private void bgLaws(GuiGraphicsExtractor g, int top) {
+        boolean canEdit = selectedCity.equals(CityData.cityName) && CityData.cardCanEditLaws;
+        int y = top + BUILDING_LIST_TOP + (canEdit ? 26 : 0);
+        int shown = Math.min(6, CityData.cardLaws.size());
+        for (int i = 0; i < shown; i++) {
+            g.fill(left() - 6, y, right() + 6, y + LAW_ROW_H - 4, CARD);
+            g.fill(left() - 6, y, left() - 4, y + LAW_ROW_H - 4, GOLD);
+            y += LAW_ROW_H;
         }
     }
 
@@ -1270,11 +1323,16 @@ public class CityScreen extends Screen {
 
         if (dataReady) {
             String rating = "+" + CityData.cardLikes + "  −" + CityData.cardDislikes;
-            rightText(g, rating, right() - 184, top + CARD_TOOLBAR_TOP + 3, GOLD);
+            int rx = CityData.cardCanRate ? left() + 196 : left();
+            g.text(this.font, rating, rx, top + CARD_TOOLBAR_TOP + 3, GOLD);
         }
 
         if (cardSubMode == CARD_SUB_COMMENTS) {
             renderComments(g, top, dataReady);
+            return;
+        }
+        if (cardSubMode == CARD_SUB_LAWS) {
+            renderLaws(g, top, dataReady);
             return;
         }
 
@@ -1342,6 +1400,37 @@ public class CityScreen extends Screen {
         }
         if (CityData.cardComments.size() > shown) {
             g.text(this.font, "… ещё " + (CityData.cardComments.size() - shown) + " комментариев", left() + 4, y + 2, DIM);
+        }
+    }
+
+    private void renderLaws(GuiGraphicsExtractor g, int top, boolean dataReady) {
+        boolean canEdit = selectedCity.equals(CityData.cityName) && CityData.cardCanEditLaws;
+        int y = top + BUILDING_LIST_TOP + (canEdit ? 26 : 0);
+        if (!dataReady) {
+            g.centeredText(this.font, "Загрузка…", cx(), y + 8, GRAY);
+            return;
+        }
+        if (CityData.cardLaws.isEmpty()) {
+            g.centeredText(this.font, canEdit ? "Законов пока нет — впиши первый" : "В этом городе законов нет", cx(), y + 8, GRAY);
+            return;
+        }
+        int shown = Math.min(6, CityData.cardLaws.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.LawInfo l = CityData.cardLaws.get(i);
+            int nx = seg(g, left() + 4, y + 6, (i + 1) + ". ", GOLD);
+            String text = l.text();
+            int maxW = right() - left() - (canEdit ? 64 : 8) - (nx - left() - 4);
+            if (this.font.width(text) > maxW) {
+                while (!text.isEmpty() && this.font.width(text + "…") > maxW) {
+                    text = text.substring(0, text.length() - 1);
+                }
+                text += "…";
+            }
+            g.text(this.font, text, nx, y + 6, WHITE);
+            y += LAW_ROW_H;
+        }
+        if (CityData.cardLaws.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.cardLaws.size() - shown) + " законов", left() + 4, y + 2, DIM);
         }
     }
 

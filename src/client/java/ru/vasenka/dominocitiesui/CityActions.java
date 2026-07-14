@@ -94,6 +94,20 @@ public final class CityActions {
     }
 
     public static void setCityDescription(String text) { send(Protocol.A_SET_CITY_DESCRIPTION, text); }
+
+    public static void addLaw(String text) { send(Protocol.A_ADD_LAW, text); }
+
+    public static void deleteLaw(int lawId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_DELETE_LAW);
+            out.writeInt(lawId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
     public static void marketInterest(int listingId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {

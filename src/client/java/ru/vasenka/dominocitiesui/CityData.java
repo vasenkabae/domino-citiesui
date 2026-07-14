@@ -42,6 +42,8 @@ public final class CityData {
                                 String photoId, boolean canDelete) {}
     /** Комментарий к городу. canDelete сервер вычисляет под получателя (автор/мэр/офицер). */
     public record CommentInfo(int id, String authorName, String text, long createdAt, boolean canDelete) {}
+    /** Пункт свода законов города. */
+    public record LawInfo(int id, String text, long createdAt) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -80,6 +82,8 @@ public final class CityData {
     public static byte cardMyVote = 0; // 0 = не голосовал, 1 = лайк, 2 = дизлайк
     public static boolean cardCanRate = false;
     public static final List<CommentInfo> cardComments = new ArrayList<>();
+    public static boolean cardCanEditLaws = false;
+    public static final List<LawInfo> cardLaws = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -293,6 +297,15 @@ public final class CityData {
                 long createdAt = in.readLong();
                 boolean canDelete = in.readBoolean();
                 cardComments.add(new CommentInfo(id, authorName, text, createdAt, canDelete));
+            }
+            cardCanEditLaws = in.readBoolean();
+            cardLaws.clear();
+            int ln = in.readInt();
+            for (int i = 0; i < ln; i++) {
+                int id = in.readInt();
+                String text = in.readUTF();
+                long createdAt = in.readLong();
+                cardLaws.add(new LawInfo(id, text, createdAt));
             }
         } catch (Exception ignored) { }
         refresh();
