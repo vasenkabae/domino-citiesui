@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 8;
+    public static final int VERSION = 9;
 
     public static final String NS = "dominocities";
     public static final String CH_ACTION    = "action";
@@ -20,6 +20,7 @@ public final class Protocol {
     public static final String CH_BOUNTIES  = "bounties";
     public static final String CH_MARKET    = "market";
     public static final String CH_BUILDINGS = "buildings";
+    public static final String CH_CITY_MAP  = "citymap";
 
     public static final byte A_REQUEST_STATE = 0;
     public static final byte A_REQUEST_TOP   = 1;
@@ -59,4 +60,6 @@ public final class Protocol {
     public static final byte A_SET_CITY_DESCRIPTION = 37;
     public static final byte A_ADD_LAW    = 38;
     public static final byte A_DELETE_LAW = 39;
+    public static final byte A_REQUEST_CITY_MAP = 40;
+    public static final byte A_REFRESH_MAP       = 41;
 }

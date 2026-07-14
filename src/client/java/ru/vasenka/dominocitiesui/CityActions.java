@@ -97,6 +97,9 @@ public final class CityActions {
 
     public static void addLaw(String text) { send(Protocol.A_ADD_LAW, text); }
 
+    public static void requestCityMap() { send(Protocol.A_REQUEST_CITY_MAP); }
+    public static void refreshMap()     { send(Protocol.A_REFRESH_MAP); }
+
     public static void deleteLaw(int lawId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {

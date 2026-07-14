@@ -29,10 +29,10 @@ import java.util.Map;
 public class CityScreen extends Screen {
 
     private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3,
-            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6;
-    private static final int MODE_COUNT = 7;
+            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6, MODE_MAP = 7;
+    private static final int MODE_COUNT = 8;
     private static final String[] TAB_LABELS =
-            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок"};
+            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок", "Карта"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
@@ -133,6 +133,12 @@ public class CityScreen extends Screen {
     private String pendingMayorDesc = "";
     private boolean mayorDescSeeded = false; // seed pendingMayorDesc from CityData.description ровно один раз
 
+    // ── Карта городов ──
+    private static final int MAP_AREA_TOP = 30;
+    private static final int MAP_BOTTOM_MARGIN = 46;
+    private static final int MAP_GOLD_LINE = 0xB0F2B94E;
+    private static final int MAP_OTHER_LINE = 0x906FA0D0;
+
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
     }
@@ -196,6 +202,8 @@ public class CityScreen extends Screen {
             initBounties(top);
         } else if (mode == MODE_MARKET) {
             initMarket(top);
+        } else if (mode == MODE_MAP) {
+            initMap(top);
         } else if (!CityData.hasCity) {
             initNoCity(top);
         } else if (mode == MODE_ECONOMY) {
@@ -236,6 +244,7 @@ public class CityScreen extends Screen {
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
         if (mode == MODE_BOUNTIES) CityActions.requestBounties();
         if (mode == MODE_MARKET) CityActions.requestMarket();
+        if (mode == MODE_MAP) CityActions.requestCityMap();
         rebuildWidgets();
     }
 
@@ -720,6 +729,27 @@ public class CityScreen extends Screen {
         return top + MARKET_FORM_TOP_MARGIN + MARKET_ROW_H + MARKET_GAP + MARKET_ROW_H + MARKET_GAP;
     }
 
+    private void initMap(int top) {
+        String label = CityData.mapInProgress ? "Идёт пересчёт…"
+                : CityData.mapCooldownSeconds > 0 ? "Обновить карту (" + CityData.mapCooldownSeconds + "с)"
+                : "Обновить карту";
+        addRenderableWidget(Button.builder(Component.literal(label), b -> CityActions.refreshMap())
+                .bounds(cx() - 80, this.height - 40, 160, 20).build());
+    }
+
+    /** Прямоугольник отображения картинки карты внутри контентной зоны (letterbox по аспекту). */
+    private record MapRect(double x, double y, double w, double h) {}
+
+    private MapRect mapDisplayRect(int top) {
+        double boxX1 = left(), boxY1 = top + MAP_AREA_TOP;
+        double boxX2 = right(), boxY2 = this.height - MAP_BOTTOM_MARGIN;
+        double boxW = boxX2 - boxX1, boxH = boxY2 - boxY1;
+        double imgW = Math.max(1, CityData.mapWidth), imgH = Math.max(1, CityData.mapHeight);
+        double scale = Math.min(boxW / imgW, boxH / imgH);
+        double dispW = imgW * scale, dispH = imgH * scale;
+        return new MapRect(boxX1 + (boxW - dispW) / 2, boxY1 + (boxH - dispH) / 2, dispW, dispH);
+    }
+
     // ── Универсальный поиск-пикер ресурса ──────────────────────────────────
 
     /** Строка поиска ресурса + количество. Совпадения рисуются/кликаются отдельно (см. renderPickerMatches/handlePickerClick) — вживую, по текущему тексту поля, без пересборки виджетов на каждую нажатую клавишу. */
@@ -940,6 +970,8 @@ public class CityScreen extends Screen {
             bgBounties(g, top, mouseX, mouseY);
         } else if (mode == MODE_MARKET) {
             bgMarket(g, top);
+        } else if (mode == MODE_MAP) {
+            bgMap(g, top);
         } else if (!CityData.hasCity) {
             bgNoCity(g, top);
         } else if (mode == MODE_ECONOMY) {
@@ -1117,6 +1149,48 @@ public class CityScreen extends Screen {
         }
     }
 
+    private void bgMap(GuiGraphicsExtractor g, int top) {
+        MapRect r = mapDisplayRect(top);
+        g.fill((int) r.x() - 1, (int) r.y() - 1, (int) (r.x() + r.w()) + 1, (int) (r.y() + r.h()) + 1, CARD);
+        if (!CityData.mapHasImage) return;
+        Identifier tex = CityMapTexture.get(CityData.mapVersion);
+        if (tex != null) {
+            g.blit(RenderPipelines.GUI_TEXTURED, tex, (int) r.x(), (int) r.y(), 0f, 0f,
+                    (int) r.w(), (int) r.h(), CityMapTexture.width(), CityMapTexture.height(),
+                    CityMapTexture.width(), CityMapTexture.height());
+        }
+
+        double scale = r.w() / Math.max(1, CityData.mapWidth);
+        for (CityData.MapCityInfo c : CityData.mapCities) {
+            if (!c.world().equals(CityData.mapWorld)) continue;
+            double imgX = (c.x() - CityData.mapMinX) / (double) CityData.mapBlockSize;
+            double imgZ = (c.z() - CityData.mapMinZ) / (double) CityData.mapBlockSize;
+            double imgR = c.radius() / (double) CityData.mapBlockSize;
+            int x1 = (int) (r.x() + (imgX - imgR) * scale), z1 = (int) (r.y() + (imgZ - imgR) * scale);
+            int x2 = (int) (r.x() + (imgX + imgR) * scale), z2 = (int) (r.y() + (imgZ + imgR) * scale);
+            g.outline(x1, z1, Math.max(1, x2 - x1), Math.max(1, z2 - z1), c.mine() ? MAP_GOLD_LINE : MAP_OTHER_LINE);
+        }
+
+        // Точка игрока, если он в том же мире, что и карта.
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
+            double imgX = (player.getX() - CityData.mapMinX) / CityData.mapBlockSize;
+            double imgZ = (player.getZ() - CityData.mapMinZ) / CityData.mapBlockSize;
+            int px = (int) (r.x() + imgX * scale), pz = (int) (r.y() + imgZ * scale);
+            g.fill(px - 2, pz - 2, px + 2, pz + 2, 0xFFFFFFFF);
+        }
+    }
+
+    /** Bukkit хранит имя папки мира ("world"/"world_nether"/"world_the_end"), клиент — ResourceKey измерения. */
+    private static boolean worldMatches(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension, String bukkitWorld) {
+        return switch (bukkitWorld) {
+            case "world" -> dimension.equals(net.minecraft.world.level.Level.OVERWORLD);
+            case "world_nether" -> dimension.equals(net.minecraft.world.level.Level.NETHER);
+            case "world_the_end" -> dimension.equals(net.minecraft.world.level.Level.END);
+            default -> false;
+        };
+    }
+
     private void bgMarket(GuiGraphicsExtractor g, int top) {
         int y = marketListTop(top);
         int shown = Math.min(6, CityData.market.size());
@@ -1168,6 +1242,8 @@ public class CityScreen extends Screen {
             renderBounties(g, top);
         } else if (mode == MODE_MARKET) {
             renderMarket(g, top, mouseX, mouseY);
+        } else if (mode == MODE_MAP) {
+            renderMap(g, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, "У тебя пока нет города", cx(), top + 14, WHITE);
             g.centeredText(this.font, "Оснуй свой — прямо там, где стоишь", cx(), top + 28, GRAY);
@@ -1579,6 +1655,20 @@ public class CityScreen extends Screen {
         if (CityData.bounties.size() > shown) {
             g.text(this.font, "… ещё " + (CityData.bounties.size() - shown) + " заказов", left() + 4, y + 4, DIM);
         }
+    }
+
+    private void renderMap(GuiGraphicsExtractor g, int top) {
+        MapRect r = mapDisplayRect(top);
+        if (!CityData.mapHasImage) {
+            g.centeredText(this.font, "Карта ещё не строилась", cx(), (int) (r.y() + r.h() / 2) - 4, GRAY);
+            g.centeredText(this.font, "нажми «Обновить карту»", cx(), (int) (r.y() + r.h() / 2) + 8, DIM);
+            return;
+        }
+        if (CityMapTexture.get(CityData.mapVersion) == null) {
+            g.centeredText(this.font, "Загрузка изображения…", cx(), (int) (r.y() + r.h() / 2), GRAY);
+        }
+        g.text(this.font, "серое — ещё не исследовано игроками", left(), top + 12, DIM);
+        chip(g, right() - 130, top + 10, "твой город", CHIP_GREEN_BG, GOLD_BRIGHT);
     }
 
     private void renderMarket(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {

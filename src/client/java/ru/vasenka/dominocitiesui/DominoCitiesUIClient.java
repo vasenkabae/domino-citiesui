@@ -34,6 +34,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Bounties.TYPE, Payloads.Bounties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Market.TYPE, Payloads.Market.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Buildings.TYPE, Payloads.Buildings.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.CityMap.TYPE, Payloads.CityMap.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -54,6 +55,8 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onMarket(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(Payloads.Buildings.TYPE, (payload, context) ->
                 context.client().execute(() -> CityData.onBuildings(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(Payloads.CityMap.TYPE, (payload, context) ->
+                context.client().execute(() -> CityData.onCityMap(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(

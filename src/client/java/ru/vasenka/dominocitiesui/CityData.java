@@ -44,6 +44,8 @@ public final class CityData {
     public record CommentInfo(int id, String authorName, String text, long createdAt, boolean canDelete) {}
     /** Пункт свода законов города. */
     public record LawInfo(int id, String text, long createdAt) {}
+    /** Контур города для мини-карты. */
+    public record MapCityInfo(String name, String world, int x, int z, int radius, boolean mine) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -84,6 +86,15 @@ public final class CityData {
     public static final List<CommentInfo> cardComments = new ArrayList<>();
     public static boolean cardCanEditLaws = false;
     public static final List<LawInfo> cardLaws = new ArrayList<>();
+
+    // Плоская карта городов (вкладка «Карта»).
+    public static boolean mapHasImage = false;
+    public static long mapVersion = 0;
+    public static String mapWorld = "";
+    public static int mapMinX, mapMinZ, mapBlockSize, mapWidth, mapHeight;
+    public static boolean mapInProgress = false;
+    public static int mapCooldownSeconds = 0;
+    public static final List<MapCityInfo> mapCities = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -306,6 +317,35 @@ public final class CityData {
                 String text = in.readUTF();
                 long createdAt = in.readLong();
                 cardLaws.add(new LawInfo(id, text, createdAt));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onCityMap(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
+            mapHasImage = in.readBoolean();
+            if (mapHasImage) {
+                mapVersion = in.readLong();
+                mapWorld = in.readUTF();
+                mapMinX = in.readInt();
+                mapMinZ = in.readInt();
+                mapBlockSize = in.readInt();
+                mapWidth = in.readInt();
+                mapHeight = in.readInt();
+            }
+            mapInProgress = in.readBoolean();
+            mapCooldownSeconds = in.readInt();
+            mapCities.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                String name = in.readUTF();
+                String world = in.readUTF();
+                int x = in.readInt(), z = in.readInt(), radius = in.readInt();
+                boolean mine = in.readBoolean();
+                mapCities.add(new MapCityInfo(name, world, x, z, radius, mine));
             }
         } catch (Exception ignored) { }
         refresh();

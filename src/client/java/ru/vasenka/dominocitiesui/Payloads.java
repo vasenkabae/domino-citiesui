@@ -93,4 +93,11 @@ public final class Payloads {
                 (buf, p) -> buf.writeBytes(p.data), buf -> new Buildings(readAll(buf)));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+
+    public record CityMap(byte[] data) implements CustomPacketPayload {
+        public static final Type<CityMap> TYPE = new Type<>(id(Protocol.CH_CITY_MAP));
+        public static final StreamCodec<FriendlyByteBuf, CityMap> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBytes(p.data), buf -> new CityMap(readAll(buf)));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 }
