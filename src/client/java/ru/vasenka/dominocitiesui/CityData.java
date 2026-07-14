@@ -36,6 +36,10 @@ public final class CityData {
     public record MarketListingInfo(int id, String sellerName, net.minecraft.world.item.ItemStack item,
                                      String priceText, int interestedCount, boolean mine,
                                      List<String> interestedNames) {}
+    /** Постройка города (витрина). canDelete сервер вычисляет под получателя (владелец/мэр/офицер). */
+    public record BuildingInfo(int id, String name, String ownerName, String description, long createdAt,
+                                String world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                                String photoId, boolean canDelete) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -65,6 +69,9 @@ public final class CityData {
     public static final List<BountyInfo> bounties = new ArrayList<>();
     public static MyHunt myHunt = null; // null = сейчас ни за кем не охочусь
     public static final List<MarketListingInfo> market = new ArrayList<>();
+    // Постройки последнего запрошенного города (карточка во «Все города»).
+    public static String buildingsCity = "";
+    public static final List<BuildingInfo> buildings = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -237,6 +244,31 @@ public final class CityData {
                 List<String> names = new ArrayList<>();
                 if (mine) for (int j = 0; j < interestedCount; j++) names.add(in.readUTF());
                 market.add(new MarketListingInfo(id, sellerName, item, priceText, interestedCount, mine, names));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onBuildings(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
+            buildingsCity = in.readUTF();
+            buildings.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                int id = in.readInt();
+                String name = in.readUTF();
+                String ownerName = in.readUTF();
+                String description = in.readUTF();
+                long createdAt = in.readLong();
+                String world = in.readUTF();
+                int minX = in.readInt(), minY = in.readInt(), minZ = in.readInt();
+                int maxX = in.readInt(), maxY = in.readInt(), maxZ = in.readInt();
+                String photoId = in.readUTF();
+                boolean canDelete = in.readBoolean();
+                buildings.add(new BuildingInfo(id, name, ownerName, description, createdAt,
+                        world, minX, minY, minZ, maxX, maxY, maxZ, photoId, canDelete));
             }
         } catch (Exception ignored) { }
         refresh();

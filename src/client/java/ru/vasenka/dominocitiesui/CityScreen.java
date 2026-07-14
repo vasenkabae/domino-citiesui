@@ -5,9 +5,13 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +109,17 @@ public class CityScreen extends Screen {
     private String pendingMarketPrice = "";
     private String pendingMarketQuantity = "1";
 
+    // ── Постройки (карточка города внутри «Все города») ──
+    private static final int BUILDING_LIST_TOP = 44;   // после шапки карточки города
+    private static final int BUILDING_ROW_H = 40;
+    private static final int BUILDING_THUMB_W = 56, BUILDING_THUMB_H = 32;
+    private static final SimpleDateFormat BUILDING_DATE = new SimpleDateFormat("dd.MM.yyyy");
+    private String selectedCity = null;    // null — показываем список городов
+    private int selectedBuildingId = -1;   // -1 — список построек выбранного города
+    private boolean buildingFormOpen = false;
+    private EditBox buildingNameInput, buildingDescInput;
+    private String pendingBuildingName = "", pendingBuildingDesc = "";
+
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
     }
@@ -116,6 +131,8 @@ public class CityScreen extends Screen {
         if (bountyNickInput != null) pendingBountyNick = bountyNickInput.getValue();
         if (marketPriceInput != null) pendingMarketPrice = marketPriceInput.getValue();
         if (marketQuantityInput != null) pendingMarketQuantity = marketQuantityInput.getValue();
+        if (buildingNameInput != null) pendingBuildingName = buildingNameInput.getValue();
+        if (buildingDescInput != null) pendingBuildingDesc = buildingDescInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -128,7 +145,8 @@ public class CityScreen extends Screen {
 
     private boolean isTypingInField() {
         if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)
-                || isFocused(marketPriceInput) || isFocused(marketQuantityInput)) return true;
+                || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
+                || isFocused(buildingNameInput) || isFocused(buildingDescInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -191,6 +209,10 @@ public class CityScreen extends Screen {
 
     private void switchMode(int m) {
         mode = m;
+        // Возврат на вкладку «Все города» всегда начинается со списка городов.
+        selectedCity = null;
+        selectedBuildingId = -1;
+        buildingFormOpen = false;
         if (mode == MODE_TOP) CityActions.requestTop();
         if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
@@ -319,6 +341,8 @@ public class CityScreen extends Screen {
     }
 
     private void initDirectory(int top) {
+        if (selectedCity != null) { initCityCard(top); return; }
+
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
                 b -> CityActions.requestDirectory())
                 .bounds(cx() - 60, this.height - 40, 120, 20).build());
@@ -334,6 +358,94 @@ public class CityScreen extends Screen {
             }
             y += 28;
         }
+    }
+
+    /** Карточка выбранного города: список построек / детали постройки / форма сохранения. */
+    private void initCityCard(int top) {
+        addRenderableWidget(Button.builder(Component.literal("← Назад"), b -> {
+            if (buildingFormOpen) buildingFormOpen = false;
+            else if (selectedBuildingId != -1) selectedBuildingId = -1;
+            else selectedCity = null;
+            rebuildWidgets();
+        }).bounds(left(), top - 4, 70, 18).build());
+
+        if (buildingFormOpen) { initBuildingForm(top); return; }
+
+        if (selectedBuildingId != -1) {
+            CityData.BuildingInfo b = findSelectedBuilding();
+            if (b != null && b.canDelete()) {
+                addRenderableWidget(Button.builder(Component.literal("Удалить"),
+                        btn -> { CityActions.deleteBuilding(selectedCity, selectedBuildingId); selectedBuildingId = -1; })
+                        .bounds(right() - 70, top - 4, 70, 18).build());
+            }
+            return;
+        }
+
+        // Список построек: жителю своего города доступны рулетка и сохранение.
+        if (selectedCity.equals(CityData.cityName)) {
+            addRenderableWidget(Button.builder(Component.literal("Получить рулетку"), b -> {
+                CityActions.requestBuildingWand();
+                net.minecraft.client.Minecraft.getInstance().setScreen(null);
+            }).bounds(left(), this.height - 40, 130, 20).build());
+            addRenderableWidget(Button.builder(Component.literal("Сохранить постройку"), b -> {
+                buildingFormOpen = true;
+                rebuildWidgets();
+            }).bounds(left() + 134, this.height - 40, 140, 20).build());
+        }
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestBuildings(selectedCity))
+                .bounds(right() - 90, this.height - 40, 90, 20).build());
+    }
+
+    /** Форма сохранения постройки — углы уже отмечены рулеткой (сервер проверит). */
+    private void initBuildingForm(int top) {
+        int y = top + 40;
+        buildingNameInput = new EditBox(this.font, left(), y, right() - left(), 20, Component.literal("Название"));
+        buildingNameInput.setMaxLength(32);
+        buildingNameInput.setHint(Component.literal("Название постройки (до 32)"));
+        buildingNameInput.setValue(pendingBuildingName);
+        addRenderableWidget(buildingNameInput);
+        y += 26;
+
+        buildingDescInput = new EditBox(this.font, left(), y, right() - left(), 20, Component.literal("Описание"));
+        buildingDescInput.setMaxLength(200);
+        buildingDescInput.setHint(Component.literal("Описание (до 200 символов)"));
+        buildingDescInput.setValue(pendingBuildingDesc);
+        addRenderableWidget(buildingDescInput);
+        y += 34;
+
+        addRenderableWidget(Button.builder(Component.literal("Сделать фото (3 сек) и сохранить"), b -> {
+            String name = buildingNameInput.getValue().trim();
+            if (name.isEmpty()) return;
+            BuildingPhotoTaker.start(name, buildingDescInput.getValue().trim());
+            closeBuildingForm();
+            net.minecraft.client.Minecraft.getInstance().setScreen(null);
+        }).bounds(left(), y, right() - left(), 20).build());
+        y += 24;
+
+        addRenderableWidget(Button.builder(Component.literal("Сохранить без фото"), b -> {
+            String name = buildingNameInput.getValue().trim();
+            if (name.isEmpty()) return;
+            CityActions.saveBuilding(name, buildingDescInput.getValue().trim(), "");
+            closeBuildingForm();
+            rebuildWidgets();
+        }).bounds(left(), y, right() - left(), 20).build());
+    }
+
+    private void closeBuildingForm() {
+        buildingFormOpen = false;
+        pendingBuildingName = "";
+        pendingBuildingDesc = "";
+        buildingNameInput = null;
+        buildingDescInput = null;
+    }
+
+    private CityData.BuildingInfo findSelectedBuilding() {
+        if (selectedCity == null || !selectedCity.equals(CityData.buildingsCity)) return null;
+        for (CityData.BuildingInfo b : CityData.buildings) {
+            if (b.id() == selectedBuildingId) return b;
+        }
+        return null;
     }
 
     private void initTop(int top) {
@@ -590,9 +702,44 @@ public class CityScreen extends Screen {
             } else if (mode == MODE_BOUNTIES) {
                 int y = CONTENT_TOP + BOUNTY_NICK_TOP + BOUNTY_NICK_ROW_H;
                 if (handlePickerClick(event.x(), event.y(), y, "bountyReward")) return true;
+            } else if (mode == MODE_DIRECTORY && !buildingFormOpen) {
+                if (handleDirectoryClick(event.x(), event.y())) return true;
             }
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    /** Клики по строкам: город в справочнике → карточка; постройка в карточке → детали. */
+    private boolean handleDirectoryClick(double mx, double my) {
+        if (selectedCity == null) {
+            int y = CONTENT_TOP;
+            int shown = Math.min(6, CityData.directory.size());
+            for (int i = 0; i < shown; i++) {
+                CityData.CityInfo c = CityData.directory.get(i);
+                // Правый край строки не считаем — там живёт кнопка «Вступить».
+                if (mx >= left() - 6 && mx < right() - 80 && my >= y - 5 && my < y + 21) {
+                    selectedCity = c.name();
+                    selectedBuildingId = -1;
+                    CityActions.requestBuildings(c.name());
+                    rebuildWidgets();
+                    return true;
+                }
+                y += 28;
+            }
+        } else if (selectedBuildingId == -1 && selectedCity.equals(CityData.buildingsCity)) {
+            int y = CONTENT_TOP + BUILDING_LIST_TOP;
+            int shown = Math.min(5, CityData.buildings.size());
+            for (int i = 0; i < shown; i++) {
+                CityData.BuildingInfo b = CityData.buildings.get(i);
+                if (mx >= left() - 6 && mx < right() + 6 && my >= y && my < y + BUILDING_ROW_H - 4) {
+                    selectedBuildingId = b.id();
+                    rebuildWidgets();
+                    return true;
+                }
+                y += BUILDING_ROW_H;
+            }
+        }
+        return false;
     }
 
     // ── Хелперы отрисовки ────────────────────────────────────────────────────
@@ -720,6 +867,7 @@ public class CityScreen extends Screen {
     }
 
     private void bgDirectory(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        if (selectedCity != null) { bgCityCard(g, top, mouseX, mouseY); return; }
         int y = top;
         int shown = Math.min(6, CityData.directory.size());
         for (int i = 0; i < shown; i++) {
@@ -728,6 +876,46 @@ public class CityScreen extends Screen {
             g.fill(left() - 6, y - 5, right() + 6, y + 21, hover ? ROW_HOVER : CARD);
             g.fill(left() - 6, y - 5, left() - 4, y + 21, c.open() ? GREEN : RED);
             y += 28;
+        }
+    }
+
+    private void bgCityCard(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        g.horizontalLine(left(), right(), top + BUILDING_LIST_TOP - 8, LINE);
+        if (buildingFormOpen) return;
+
+        if (selectedBuildingId != -1) {
+            CityData.BuildingInfo b = findSelectedBuilding();
+            if (b == null) return;
+            // Крупное фото по центру (или тёмная заглушка, пока качается / если его нет)
+            int pw = Math.min(320, right() - left());
+            int ph = pw * 9 / 16;
+            int px = cx() - pw / 2, py = top + BUILDING_LIST_TOP;
+            g.fill(px - 1, py - 1, px + pw + 1, py + ph + 1, CARD);
+            Identifier tex = BuildingPhotos.get(b.photoId());
+            if (tex != null) {
+                int[] sz = BuildingPhotos.size(b.photoId());
+                g.blit(RenderPipelines.GUI_TEXTURED, tex, px, py, 0f, 0f, pw, ph, sz[0], sz[1], sz[0], sz[1]);
+            }
+            return;
+        }
+
+        int y = top + BUILDING_LIST_TOP;
+        int shown = Math.min(5, CityData.buildings.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.BuildingInfo b = CityData.buildings.get(i);
+            boolean hover = mouseX >= left() - 6 && mouseX < right() + 6
+                    && mouseY >= y && mouseY < y + BUILDING_ROW_H - 4;
+            g.fill(left() - 6, y, right() + 6, y + BUILDING_ROW_H - 4, hover ? ROW_HOVER : CARD);
+            g.fill(left() - 6, y, left() - 4, y + BUILDING_ROW_H - 4, GOLD);
+            Identifier tex = BuildingPhotos.get(b.photoId());
+            if (tex != null) {
+                int[] sz = BuildingPhotos.size(b.photoId());
+                g.blit(RenderPipelines.GUI_TEXTURED, tex, left(), y + 2, 0f, 0f,
+                        BUILDING_THUMB_W, BUILDING_THUMB_H, sz[0], sz[1], sz[0], sz[1]);
+            } else {
+                g.fill(left(), y + 2, left() + BUILDING_THUMB_W, y + 2 + BUILDING_THUMB_H, 0x30000000);
+            }
+            y += BUILDING_ROW_H;
         }
     }
 
@@ -916,6 +1104,7 @@ public class CityScreen extends Screen {
     }
 
     private void renderDirectory(GuiGraphicsExtractor g, int top) {
+        if (selectedCity != null) { renderCityCard(g, top); return; }
         if (CityData.directory.isEmpty()) {
             g.centeredText(this.font, "Городов пока нет", cx(), top + 12, GRAY);
             return;
@@ -935,7 +1124,116 @@ public class CityScreen extends Screen {
         }
         if (CityData.directory.size() > shown) {
             g.text(this.font, "… ещё " + (CityData.directory.size() - shown) + " городов", left() + 4, y, DIM);
+        } else {
+            g.text(this.font, "клик по городу — карточка с постройками", left() + 4, y + 2, DIM);
         }
+    }
+
+    private void renderCityCard(GuiGraphicsExtractor g, int top) {
+        scaledText(g, selectedCity, cx(), top - 2, 1.2f, GOLD_BRIGHT, true);
+        CityData.CityInfo info = null;
+        for (CityData.CityInfo c : CityData.directory) if (c.name().equals(selectedCity)) info = c;
+        String sub = info != null ? "мэр " + info.mayor() + "  ·  жителей " + info.memberNames().size() : "";
+        g.centeredText(this.font, sub + (sub.isEmpty() ? "" : "  ·  ") + "ПОСТРОЙКИ", cx(), top + 16, DIM);
+
+        if (buildingFormOpen) {
+            renderBuildingForm(g, top);
+            return;
+        }
+
+        boolean dataReady = selectedCity.equals(CityData.buildingsCity);
+        if (selectedBuildingId != -1) {
+            renderBuildingDetail(g, top);
+            return;
+        }
+
+        int y = top + BUILDING_LIST_TOP;
+        if (!dataReady) {
+            g.centeredText(this.font, "Загрузка…", cx(), y + 8, GRAY);
+            return;
+        }
+        if (CityData.buildings.isEmpty()) {
+            g.centeredText(this.font, "Построек пока нет", cx(), y + 8, GRAY);
+            if (selectedCity.equals(CityData.cityName)) {
+                g.centeredText(this.font, "Возьми рулетку, отметь два угла и сохрани первую!", cx(), y + 22, DIM);
+            }
+            return;
+        }
+        int shown = Math.min(5, CityData.buildings.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.BuildingInfo b = CityData.buildings.get(i);
+            int tx = left() + BUILDING_THUMB_W + 8;
+            int nx = seg(g, tx, y + 4, b.name(), WHITE);
+            seg(g, nx + 8, y + 4, BUILDING_DATE.format(new Date(b.createdAt())), DIM);
+            g.text(this.font, "построил " + b.ownerName(), tx, y + 16, GRAY);
+            String desc = b.description();
+            if (!desc.isEmpty()) {
+                if (this.font.width(desc) > right() - tx - 8) {
+                    while (!desc.isEmpty() && this.font.width(desc + "…") > right() - tx - 8) {
+                        desc = desc.substring(0, desc.length() - 1);
+                    }
+                    desc += "…";
+                }
+                g.text(this.font, desc, tx, y + 27, DIM);
+            }
+            y += BUILDING_ROW_H;
+        }
+        if (CityData.buildings.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.buildings.size() - shown) + " построек", left() + 4, y + 2, DIM);
+        }
+    }
+
+    private void renderBuildingDetail(GuiGraphicsExtractor g, int top) {
+        CityData.BuildingInfo b = findSelectedBuilding();
+        if (b == null) {
+            g.centeredText(this.font, "Постройка не найдена", cx(), top + BUILDING_LIST_TOP + 8, GRAY);
+            return;
+        }
+        int pw = Math.min(320, right() - left());
+        int ph = pw * 9 / 16;
+        int py = top + BUILDING_LIST_TOP;
+        if (BuildingPhotos.get(b.photoId()) == null) {
+            String note = b.photoId().isEmpty() ? "без фото" : "фото загружается…";
+            g.centeredText(this.font, note, cx(), py + ph / 2 - 4, DIM);
+        }
+        int y = py + ph + 8;
+        int nx = seg(g, left(), y, b.name(), GOLD_BRIGHT);
+        seg(g, nx + 10, y, BUILDING_DATE.format(new Date(b.createdAt())), DIM);
+        rightText(g, "построил " + b.ownerName(), right(), y, GRAY);
+        y += 14;
+        g.text(this.font, b.world() + "  " + b.minX() + " " + b.minY() + " " + b.minZ()
+                + "  →  " + b.maxX() + " " + b.maxY() + " " + b.maxZ(), left(), y, BLUE);
+        y += 16;
+        for (String line : wrapText(b.description(), right() - left())) {
+            g.text(this.font, line, left(), y, WHITE);
+            y += 11;
+            if (y > py2() - 20) break; // не вылезаем за панель
+        }
+    }
+
+    private void renderBuildingForm(GuiGraphicsExtractor g, int top) {
+        g.text(this.font, "НОВАЯ ПОСТРОЙКА", left(), top + BUILDING_LIST_TOP - 4, DIM);
+        int hintY = top + 40 + 26 + 20 + 34 + 24 + 26;
+        g.text(this.font, "Контур должен быть отмечен рулеткой (два угла).", left(), hintY, GRAY);
+        g.text(this.font, "«Сделать фото» закроет меню: 3 секунды, чтобы навести камеру.", left(), hintY + 12, DIM);
+    }
+
+    /** Простой перенос строк по словам под ширину панели. */
+    private List<String> wrapText(String text, int maxWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text.isEmpty()) return lines;
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String probe = line.isEmpty() ? word : line + " " + word;
+            if (this.font.width(probe) > maxWidth && !line.isEmpty()) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(probe);
+            }
+        }
+        lines.add(line.toString());
+        return lines;
     }
 
     private void renderTop(GuiGraphicsExtractor g, int top) {

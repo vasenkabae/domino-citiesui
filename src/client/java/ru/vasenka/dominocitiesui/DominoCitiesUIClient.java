@@ -33,6 +33,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Contracts.TYPE, Payloads.Contracts.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Bounties.TYPE, Payloads.Bounties.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Market.TYPE, Payloads.Market.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.Buildings.TYPE, Payloads.Buildings.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -51,6 +52,8 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onBounties(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(Payloads.Market.TYPE, (payload, context) ->
                 context.client().execute(() -> CityData.onMarket(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(Payloads.Buildings.TYPE, (payload, context) ->
+                context.client().execute(() -> CityData.onBuildings(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -61,13 +64,17 @@ public class DominoCitiesUIClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) {
-                if (client.player != null && client.screen == null) {
+                // Во время отсчёта фото постройки K-меню не открываем — кадр должен быть чистым.
+                if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
                     client.setScreen(new CityScreen());
                     CityActions.requestState();
                     CityActions.requestTop();
                 }
             }
         });
+
+        // Отсчёт и съёмка фото постройки (активируется из формы сохранения в CityScreen).
+        ClientTickEvents.END_CLIENT_TICK.register(BuildingPhotoTaker::tick);
 
         // HUD: подпись названия города над хотбаром, пока игрок в своём городе.
         HudElementRegistry.attachElementBefore(VanillaHudElements.HOTBAR,

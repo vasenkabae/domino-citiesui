@@ -46,6 +46,23 @@ public final class CityActions {
     public static void requestContracts()   { send(Protocol.A_REQUEST_CONTRACTS); }
     public static void requestBounties()    { send(Protocol.A_REQUEST_BOUNTIES); }
     public static void requestMarket()      { send(Protocol.A_REQUEST_MARKET); }
+    public static void requestBuildings(String cityName) { send(Protocol.A_REQUEST_BUILDINGS, cityName); }
+    public static void requestBuildingWand() { send(Protocol.A_BUILDING_WAND); }
+    public static void saveBuilding(String name, String description, String photoId) {
+        send(Protocol.A_BUILDING_SAVE, name, description, photoId);
+    }
+    public static void deleteBuilding(String cityName, int buildingId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_BUILDING_DELETE);
+            out.writeUTF(cityName);
+            out.writeInt(buildingId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
     public static void marketInterest(int listingId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {
