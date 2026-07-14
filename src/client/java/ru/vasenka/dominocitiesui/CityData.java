@@ -356,6 +356,8 @@ public final class CityData {
         Minecraft mc = Minecraft.getInstance();
         if (mc.screen instanceof CityScreen screen) {
             screen.refresh();
+        } else if (mc.screen instanceof WorldMapScreen screen) {
+            screen.refresh();
         }
     }
 }

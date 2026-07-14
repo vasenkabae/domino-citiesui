@@ -20,6 +20,7 @@ import org.lwjgl.glfw.GLFW;
 public class DominoCitiesUIClient implements ClientModInitializer {
 
     private static KeyMapping openKey;
+    private static KeyMapping mapKey;
 
     @Override
     public void onInitializeClient() {
@@ -64,6 +65,12 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
                 KeyMapping.Category.MISC));
+        // Отдельная клавиша карты мира — не через K-меню, чтобы его не захламлять.
+        mapKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.dominocities.map",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_Y,
+                KeyMapping.Category.MISC));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) {
@@ -72,6 +79,11 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                     client.setScreen(new CityScreen());
                     CityActions.requestState();
                     CityActions.requestTop();
+                }
+            }
+            while (mapKey.consumeClick()) {
+                if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
+                    client.setScreen(new WorldMapScreen());
                 }
             }
         });
