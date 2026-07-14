@@ -40,6 +40,8 @@ public final class CityData {
     public record BuildingInfo(int id, String name, String ownerName, String description, long createdAt,
                                 String world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
                                 String photoId, boolean canDelete) {}
+    /** Комментарий к городу. canDelete сервер вычисляет под получателя (автор/мэр/офицер). */
+    public record CommentInfo(int id, String authorName, String text, long createdAt, boolean canDelete) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -61,6 +63,7 @@ public final class CityData {
     public static String mayorTitle = "Мэр";
     public static String officerTitle = "Офицер";
     public static String memberTitle = "Житель";
+    public static String description = "";
 
     public static final List<TopEntry> top = new ArrayList<>();
     public static final List<CityInfo> directory = new ArrayList<>();
@@ -69,9 +72,14 @@ public final class CityData {
     public static final List<BountyInfo> bounties = new ArrayList<>();
     public static MyHunt myHunt = null; // null = сейчас ни за кем не охочусь
     public static final List<MarketListingInfo> market = new ArrayList<>();
-    // Постройки последнего запрошенного города (карточка во «Все города»).
+    // Постройки/рейтинг/комментарии/описание последнего запрошенного города (карточка во «Все города»).
     public static String buildingsCity = "";
     public static final List<BuildingInfo> buildings = new ArrayList<>();
+    public static String cardDescription = "";
+    public static long cardLikes = 0, cardDislikes = 0;
+    public static byte cardMyVote = 0; // 0 = не голосовал, 1 = лайк, 2 = дизлайк
+    public static boolean cardCanRate = false;
+    public static final List<CommentInfo> cardComments = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -108,6 +116,7 @@ public final class CityData {
                 mayorTitle = in.readUTF();
                 officerTitle = in.readUTF();
                 memberTitle = in.readUTF();
+                description = in.readUTF();
             }
         } catch (Exception ignored) { /* битый пакет — молча */ }
         refresh();
@@ -254,21 +263,36 @@ public final class CityData {
             int ver = in.readInt();
             if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
             buildingsCity = in.readUTF();
+            cardDescription = in.readUTF();
             buildings.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
                 int id = in.readInt();
                 String name = in.readUTF();
                 String ownerName = in.readUTF();
-                String description = in.readUTF();
+                String bDesc = in.readUTF();
                 long createdAt = in.readLong();
                 String world = in.readUTF();
                 int minX = in.readInt(), minY = in.readInt(), minZ = in.readInt();
                 int maxX = in.readInt(), maxY = in.readInt(), maxZ = in.readInt();
                 String photoId = in.readUTF();
                 boolean canDelete = in.readBoolean();
-                buildings.add(new BuildingInfo(id, name, ownerName, description, createdAt,
+                buildings.add(new BuildingInfo(id, name, ownerName, bDesc, createdAt,
                         world, minX, minY, minZ, maxX, maxY, maxZ, photoId, canDelete));
+            }
+            cardLikes = in.readLong();
+            cardDislikes = in.readLong();
+            cardMyVote = in.readByte();
+            cardCanRate = in.readBoolean();
+            cardComments.clear();
+            int cn = in.readInt();
+            for (int i = 0; i < cn; i++) {
+                int id = in.readInt();
+                String authorName = in.readUTF();
+                String text = in.readUTF();
+                long createdAt = in.readLong();
+                boolean canDelete = in.readBoolean();
+                cardComments.add(new CommentInfo(id, authorName, text, createdAt, canDelete));
             }
         } catch (Exception ignored) { }
         refresh();

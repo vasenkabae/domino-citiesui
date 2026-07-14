@@ -63,6 +63,37 @@ public final class CityActions {
         }
         ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
     }
+
+    /** vote: 0 = убрать оценку, 1 = лайк, 2 = дизлайк. */
+    public static void rateCity(String cityName, byte vote) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_RATE_CITY);
+            out.writeUTF(cityName);
+            out.writeByte(vote);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void addComment(String cityName, String text) { send(Protocol.A_ADD_COMMENT, cityName, text); }
+
+    public static void deleteComment(String cityName, int commentId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_DELETE_COMMENT);
+            out.writeUTF(cityName);
+            out.writeInt(commentId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void setCityDescription(String text) { send(Protocol.A_SET_CITY_DESCRIPTION, text); }
     public static void marketInterest(int listingId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {

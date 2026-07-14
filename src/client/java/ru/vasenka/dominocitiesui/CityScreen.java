@@ -109,16 +109,26 @@ public class CityScreen extends Screen {
     private String pendingMarketPrice = "";
     private String pendingMarketQuantity = "1";
 
-    // ── Постройки (карточка города внутри «Все города») ──
-    private static final int BUILDING_LIST_TOP = 44;   // после шапки карточки города
+    // ── Постройки/рейтинг/комментарии (карточка города внутри «Все города») ──
+    private static final int CARD_INFO_TOP = 28;        // строка описания
+    private static final int CARD_TOOLBAR_TOP = 40;      // рейтинг + подвкладки
+    private static final int BUILDING_LIST_TOP = 58;     // после шапки карточки города
     private static final int BUILDING_ROW_H = 40;
     private static final int BUILDING_THUMB_W = 56, BUILDING_THUMB_H = 32;
+    private static final int COMMENT_ROW_H = 34;
     private static final SimpleDateFormat BUILDING_DATE = new SimpleDateFormat("dd.MM.yyyy");
+    private static final int CARD_SUB_BUILDINGS = 0, CARD_SUB_COMMENTS = 1;
     private String selectedCity = null;    // null — показываем список городов
     private int selectedBuildingId = -1;   // -1 — список построек выбранного города
     private boolean buildingFormOpen = false;
     private EditBox buildingNameInput, buildingDescInput;
     private String pendingBuildingName = "", pendingBuildingDesc = "";
+    private int cardSubMode = CARD_SUB_BUILDINGS;
+    private EditBox commentInput;
+    private String pendingComment = "";
+    private EditBox mayorDescInput;
+    private String pendingMayorDesc = "";
+    private boolean mayorDescSeeded = false; // seed pendingMayorDesc from CityData.description ровно один раз
 
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
@@ -133,6 +143,8 @@ public class CityScreen extends Screen {
         if (marketQuantityInput != null) pendingMarketQuantity = marketQuantityInput.getValue();
         if (buildingNameInput != null) pendingBuildingName = buildingNameInput.getValue();
         if (buildingDescInput != null) pendingBuildingDesc = buildingDescInput.getValue();
+        if (commentInput != null) pendingComment = commentInput.getValue();
+        if (mayorDescInput != null) pendingMayorDesc = mayorDescInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -146,7 +158,8 @@ public class CityScreen extends Screen {
     private boolean isTypingInField() {
         if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)
                 || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
-                || isFocused(buildingNameInput) || isFocused(buildingDescInput)) return true;
+                || isFocused(buildingNameInput) || isFocused(buildingDescInput)
+                || isFocused(commentInput) || isFocused(mayorDescInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -213,6 +226,7 @@ public class CityScreen extends Screen {
         selectedCity = null;
         selectedBuildingId = -1;
         buildingFormOpen = false;
+        cardSubMode = CARD_SUB_BUILDINGS;
         if (mode == MODE_TOP) CityActions.requestTop();
         if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
@@ -310,6 +324,18 @@ public class CityScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal(CityData.memberTitle),
                     b -> CityActions.setTitle((byte) 0, titleInput.getValue()))
                     .bounds(left() + 342, by, 94, 20).build());
+            by += 26;
+
+            if (!mayorDescSeeded) { pendingMayorDesc = CityData.description; mayorDescSeeded = true; }
+            mayorDescInput = new EditBox(this.font, left(), by, right() - left() - 94, 20,
+                    Component.literal("Описание города"));
+            mayorDescInput.setMaxLength(200);
+            mayorDescInput.setHint(Component.literal("Описание города (до 200, видно всем)"));
+            mayorDescInput.setValue(pendingMayorDesc);
+            addRenderableWidget(mayorDescInput);
+            addRenderableWidget(Button.builder(Component.literal("Сохранить"),
+                    b -> CityActions.setCityDescription(mayorDescInput.getValue()))
+                    .bounds(right() - 90, by, 90, 20).build());
         }
     }
 
@@ -360,7 +386,7 @@ public class CityScreen extends Screen {
         }
     }
 
-    /** Карточка выбранного города: список построек / детали постройки / форма сохранения. */
+    /** Карточка выбранного города: рейтинг/комментарии + список построек / детали / форма сохранения. */
     private void initCityCard(int top) {
         addRenderableWidget(Button.builder(Component.literal("← Назад"), b -> {
             if (buildingFormOpen) buildingFormOpen = false;
@@ -371,6 +397,8 @@ public class CityScreen extends Screen {
 
         if (buildingFormOpen) { initBuildingForm(top); return; }
 
+        boolean dataReady = selectedCity.equals(CityData.buildingsCity);
+
         if (selectedBuildingId != -1) {
             CityData.BuildingInfo b = findSelectedBuilding();
             if (b != null && b.canDelete()) {
@@ -380,6 +408,28 @@ public class CityScreen extends Screen {
             }
             return;
         }
+
+        // Рейтинг: доступен только не-жителям этого города.
+        if (dataReady && CityData.cardCanRate) {
+            boolean liked = CityData.cardMyVote == 1;
+            boolean disliked = CityData.cardMyVote == 2;
+            addRenderableWidget(Button.builder(Component.literal(liked ? "✔ нравится" : "Нравится"),
+                    b -> CityActions.rateCity(selectedCity, liked ? (byte) 0 : (byte) 1))
+                    .bounds(left(), top + CARD_TOOLBAR_TOP, 88, 16).build());
+            addRenderableWidget(Button.builder(Component.literal(disliked ? "✔ не нравится" : "Не нравится"),
+                    b -> CityActions.rateCity(selectedCity, disliked ? (byte) 0 : (byte) 2))
+                    .bounds(left() + 92, top + CARD_TOOLBAR_TOP, 100, 16).build());
+        }
+
+        // Подвкладки внутри карточки.
+        addRenderableWidget(Button.builder(Component.literal("Постройки"),
+                b -> { cardSubMode = CARD_SUB_BUILDINGS; rebuildWidgets(); })
+                .bounds(right() - 176, top + CARD_TOOLBAR_TOP, 84, 16).build());
+        addRenderableWidget(Button.builder(Component.literal("Комментарии"),
+                b -> { cardSubMode = CARD_SUB_COMMENTS; rebuildWidgets(); })
+                .bounds(right() - 88, top + CARD_TOOLBAR_TOP, 88, 16).build());
+
+        if (cardSubMode == CARD_SUB_COMMENTS) { initComments(top); return; }
 
         // Список построек: жителю своего города доступны рулетка и сохранение.
         if (selectedCity.equals(CityData.cityName)) {
@@ -395,6 +445,38 @@ public class CityScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Обновить"),
                 b -> CityActions.requestBuildings(selectedCity))
                 .bounds(right() - 90, this.height - 40, 90, 20).build());
+    }
+
+    private void initComments(int top) {
+        int y = top + BUILDING_LIST_TOP;
+        if (CityData.cardCanRate) {
+            commentInput = new EditBox(this.font, left(), y, right() - left() - 90, 20, Component.literal("Комментарий"));
+            commentInput.setMaxLength(200);
+            commentInput.setHint(Component.literal("Комментарий (до 200)"));
+            commentInput.setValue(pendingComment);
+            addRenderableWidget(commentInput);
+            addRenderableWidget(Button.builder(Component.literal("Отправить"), b -> {
+                String text = commentInput.getValue().trim();
+                if (!text.isEmpty()) {
+                    CityActions.addComment(selectedCity, text);
+                    pendingComment = "";
+                    commentInput.setValue("");
+                }
+            }).bounds(right() - 84, y, 84, 20).build());
+            y += 26;
+        }
+
+        int listY = y;
+        int shown = Math.min(5, CityData.cardComments.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.CommentInfo c = CityData.cardComments.get(i);
+            if (c.canDelete()) {
+                addRenderableWidget(Button.builder(Component.literal("Удалить"),
+                        b -> CityActions.deleteComment(selectedCity, c.id()))
+                        .bounds(right() - 60, listY + 2, 60, 16).build());
+            }
+            listY += COMMENT_ROW_H;
+        }
     }
 
     /** Форма сохранения постройки — углы уже отмечены рулеткой (сервер проверит). */
@@ -720,13 +802,15 @@ public class CityScreen extends Screen {
                 if (mx >= left() - 6 && mx < right() - 80 && my >= y - 5 && my < y + 21) {
                     selectedCity = c.name();
                     selectedBuildingId = -1;
+                    cardSubMode = CARD_SUB_BUILDINGS;
                     CityActions.requestBuildings(c.name());
                     rebuildWidgets();
                     return true;
                 }
                 y += 28;
             }
-        } else if (selectedBuildingId == -1 && selectedCity.equals(CityData.buildingsCity)) {
+        } else if (selectedBuildingId == -1 && cardSubMode == CARD_SUB_BUILDINGS
+                && selectedCity.equals(CityData.buildingsCity)) {
             int y = CONTENT_TOP + BUILDING_LIST_TOP;
             int shown = Math.min(5, CityData.buildings.size());
             for (int i = 0; i < shown; i++) {
@@ -883,21 +967,9 @@ public class CityScreen extends Screen {
         g.horizontalLine(left(), right(), top + BUILDING_LIST_TOP - 8, LINE);
         if (buildingFormOpen) return;
 
-        if (selectedBuildingId != -1) {
-            CityData.BuildingInfo b = findSelectedBuilding();
-            if (b == null) return;
-            // Крупное фото по центру (или тёмная заглушка, пока качается / если его нет)
-            int pw = Math.min(320, right() - left());
-            int ph = pw * 9 / 16;
-            int px = cx() - pw / 2, py = top + BUILDING_LIST_TOP;
-            g.fill(px - 1, py - 1, px + pw + 1, py + ph + 1, CARD);
-            Identifier tex = BuildingPhotos.get(b.photoId());
-            if (tex != null) {
-                int[] sz = BuildingPhotos.size(b.photoId());
-                g.blit(RenderPipelines.GUI_TEXTURED, tex, px, py, 0f, 0f, pw, ph, sz[0], sz[1], sz[0], sz[1]);
-            }
-            return;
-        }
+        if (selectedBuildingId != -1) { bgBuildingDetail(g, top); return; }
+
+        if (cardSubMode == CARD_SUB_COMMENTS) { bgComments(g, top, mouseX, mouseY); return; }
 
         int y = top + BUILDING_LIST_TOP;
         int shown = Math.min(5, CityData.buildings.size());
@@ -916,6 +988,33 @@ public class CityScreen extends Screen {
                 g.fill(left(), y + 2, left() + BUILDING_THUMB_W, y + 2 + BUILDING_THUMB_H, 0x30000000);
             }
             y += BUILDING_ROW_H;
+        }
+    }
+
+    private void bgComments(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        int y = top + BUILDING_LIST_TOP + (CityData.cardCanRate ? 26 : 0);
+        int shown = Math.min(5, CityData.cardComments.size());
+        for (int i = 0; i < shown; i++) {
+            boolean hover = mouseX >= left() - 6 && mouseX < right() + 6
+                    && mouseY >= y && mouseY < y + COMMENT_ROW_H - 4;
+            g.fill(left() - 6, y, right() + 6, y + COMMENT_ROW_H - 4, hover ? ROW_HOVER : CARD);
+            g.fill(left() - 6, y, left() - 4, y + COMMENT_ROW_H - 4, BLUE);
+            y += COMMENT_ROW_H;
+        }
+    }
+
+    private void bgBuildingDetail(GuiGraphicsExtractor g, int top) {
+        CityData.BuildingInfo b = findSelectedBuilding();
+        if (b == null) return;
+        // Крупное фото по центру (или тёмная заглушка, пока качается / если его нет)
+        int pw = Math.min(320, right() - left());
+        int ph = pw * 9 / 16;
+        int px = cx() - pw / 2, py = top + BUILDING_LIST_TOP;
+        g.fill(px - 1, py - 1, px + pw + 1, py + ph + 1, CARD);
+        Identifier tex = BuildingPhotos.get(b.photoId());
+        if (tex != null) {
+            int[] sz = BuildingPhotos.size(b.photoId());
+            g.blit(RenderPipelines.GUI_TEXTURED, tex, px, py, 0f, 0f, pw, ph, sz[0], sz[1], sz[0], sz[1]);
         }
     }
 
@@ -1050,6 +1149,16 @@ public class CityScreen extends Screen {
         x = seg(g, x, sy, "   Жителей ", DIM);
         seg(g, x, sy, String.valueOf(CityData.members.size()), GOLD);
 
+        String desc = CityData.description.isEmpty() ? "Без описания" : CityData.description;
+        int descColor = CityData.description.isEmpty() ? DIM : GRAY;
+        if (this.font.width(desc) > right() - left()) {
+            while (!desc.isEmpty() && this.font.width(desc + "…") > right() - left()) {
+                desc = desc.substring(0, desc.length() - 1);
+            }
+            desc += "…";
+        }
+        g.text(this.font, desc, left(), top + 30, descColor);
+
         int y = top + 44;
         int shown = Math.min(8, CityData.members.size());
         for (int i = 0; i < shown; i++) {
@@ -1134,16 +1243,38 @@ public class CityScreen extends Screen {
         CityData.CityInfo info = null;
         for (CityData.CityInfo c : CityData.directory) if (c.name().equals(selectedCity)) info = c;
         String sub = info != null ? "мэр " + info.mayor() + "  ·  жителей " + info.memberNames().size() : "";
-        g.centeredText(this.font, sub + (sub.isEmpty() ? "" : "  ·  ") + "ПОСТРОЙКИ", cx(), top + 16, DIM);
+        g.centeredText(this.font, sub, cx(), top + 16, DIM);
+
+        boolean dataReady = selectedCity.equals(CityData.buildingsCity);
+        if (dataReady) {
+            String desc = CityData.cardDescription.isEmpty() ? "Без описания" : CityData.cardDescription;
+            int descColor = CityData.cardDescription.isEmpty() ? DIM : GRAY;
+            if (this.font.width(desc) > right() - left()) {
+                while (!desc.isEmpty() && this.font.width(desc + "…") > right() - left()) {
+                    desc = desc.substring(0, desc.length() - 1);
+                }
+                desc += "…";
+            }
+            g.text(this.font, desc, left(), top + CARD_INFO_TOP, descColor);
+        }
 
         if (buildingFormOpen) {
             renderBuildingForm(g, top);
             return;
         }
 
-        boolean dataReady = selectedCity.equals(CityData.buildingsCity);
         if (selectedBuildingId != -1) {
             renderBuildingDetail(g, top);
+            return;
+        }
+
+        if (dataReady) {
+            String rating = "+" + CityData.cardLikes + "  −" + CityData.cardDislikes;
+            rightText(g, rating, right() - 184, top + CARD_TOOLBAR_TOP + 3, GOLD);
+        }
+
+        if (cardSubMode == CARD_SUB_COMMENTS) {
+            renderComments(g, top, dataReady);
             return;
         }
 
@@ -1180,6 +1311,37 @@ public class CityScreen extends Screen {
         }
         if (CityData.buildings.size() > shown) {
             g.text(this.font, "… ещё " + (CityData.buildings.size() - shown) + " построек", left() + 4, y + 2, DIM);
+        }
+    }
+
+    private void renderComments(GuiGraphicsExtractor g, int top, boolean dataReady) {
+        int y = top + BUILDING_LIST_TOP + (CityData.cardCanRate ? 26 : 0);
+        if (!dataReady) {
+            g.centeredText(this.font, "Загрузка…", cx(), y + 8, GRAY);
+            return;
+        }
+        if (CityData.cardComments.isEmpty()) {
+            g.centeredText(this.font, "Комментариев пока нет", cx(), y + 8, GRAY);
+            return;
+        }
+        int shown = Math.min(5, CityData.cardComments.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.CommentInfo c = CityData.cardComments.get(i);
+            int nx = seg(g, left() + 4, y + 3, c.authorName(), GOLD_BRIGHT);
+            seg(g, nx + 6, y + 3, BUILDING_DATE.format(new Date(c.createdAt())), DIM);
+            String text = c.text();
+            int maxW = right() - left() - (c.canDelete() ? 64 : 8);
+            if (this.font.width(text) > maxW) {
+                while (!text.isEmpty() && this.font.width(text + "…") > maxW) {
+                    text = text.substring(0, text.length() - 1);
+                }
+                text += "…";
+            }
+            g.text(this.font, text, left() + 4, y + 15, WHITE);
+            y += COMMENT_ROW_H;
+        }
+        if (CityData.cardComments.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.cardComments.size() - shown) + " комментариев", left() + 4, y + 2, DIM);
         }
     }
 
