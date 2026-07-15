@@ -65,7 +65,7 @@ public class SkillsHud implements HudElement {
             pose.scale(1.4f, 1.4f);
             g.centeredText(mc.font, title, 0, 0, (alpha << 24) | GOLD);
             pose.popMatrix();
-            g.centeredText(mc.font, "Открыты новые таланты — клавиша P",
+            g.centeredText(mc.font, "Открыты новые таланты — клавиша N",
                     cx, y + 16, (Math.max(alpha - 60, 0) << 24) | 0xA7ADB8);
             break; // только самый свежий
         }

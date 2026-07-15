@@ -83,11 +83,11 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_Y,
                 KeyMapping.Category.MISC));
-        // Профессии и древо талантов.
+        // Профессии и древо талантов. НЕ P — в ванили P занята соц. взаимодействиями.
         skillsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.dominoskills.skills",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_P,
+                GLFW.GLFW_KEY_N,
                 KeyMapping.Category.MISC));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
