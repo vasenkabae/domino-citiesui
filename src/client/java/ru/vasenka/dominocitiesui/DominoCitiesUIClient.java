@@ -21,6 +21,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
 
     private static KeyMapping openKey;
     private static KeyMapping mapKey;
+    private static KeyMapping skillsKey;
 
     @Override
     public void onInitializeClient() {
@@ -36,6 +37,11 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Market.TYPE, Payloads.Market.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Buildings.TYPE, Payloads.Buildings.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.CityMap.TYPE, Payloads.CityMap.CODEC);
+        // Профессии (dominoskills:*) — отдельный плагин на сервере, свой протокол.
+        PayloadTypeRegistry.serverboundPlay().register(SkillsPayloads.Action.TYPE, SkillsPayloads.Action.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.State.TYPE, SkillsPayloads.State.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Xp.TYPE, SkillsPayloads.Xp.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Result.TYPE, SkillsPayloads.Result.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -58,6 +64,12 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onBuildings(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(Payloads.CityMap.TYPE, (payload, context) ->
                 context.client().execute(() -> CityData.onCityMap(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.State.TYPE, (payload, context) ->
+                context.client().execute(() -> SkillsData.onState(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.Xp.TYPE, (payload, context) ->
+                context.client().execute(() -> SkillsData.onXp(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.Result.TYPE, (payload, context) ->
+                context.client().execute(() -> SkillsData.onResult(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -70,6 +82,12 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 "key.dominocities.map",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_Y,
+                KeyMapping.Category.MISC));
+        // Профессии и древо талантов.
+        skillsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.dominoskills.skills",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_P,
                 KeyMapping.Category.MISC));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -85,6 +103,12 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
                     client.setScreen(new WorldMapScreen());
                     CityActions.requestCityMap();
+                }
+            }
+            while (skillsKey.consumeClick()) {
+                if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
+                    client.setScreen(new SkillScreen());
+                    SkillsActions.requestState();
                 }
             }
         });
@@ -106,6 +130,9 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         // HUD: подпись названия города над хотбаром, пока игрок в своём городе.
         HudElementRegistry.attachElementBefore(VanillaHudElements.HOTBAR,
                 Identifier.fromNamespaceAndPath(Protocol.NS, "city_hud"), new CityHud());
+        // HUD: тосты опыта профессий и левел-апов.
+        HudElementRegistry.attachElementBefore(VanillaHudElements.HOTBAR,
+                Identifier.fromNamespaceAndPath(SkillsProtocol.NS, "skills_hud"), new SkillsHud());
 
         // Периодически обновляем state (сервер сам присылает его только по действиям игрока —
         // без опроса HUD не заметит, что игрока приняли/выгнали/распустили город кем-то другим).
@@ -114,7 +141,10 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             if (client.player == null) { ticks[0] = 0; return; }
             if (ticks[0]++ % 100 == 0) CityActions.requestState();
         });
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> CityActions.requestState());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+            CityActions.requestState();
+            SkillsActions.requestState();
+        });
 
         // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть залогиниться через
         // DominoAuth), пока игрок не нажал «Больше не показывать». Если в момент срабатывания

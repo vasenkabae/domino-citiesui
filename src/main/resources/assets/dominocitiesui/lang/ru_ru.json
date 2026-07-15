@@ -1,5 +1,6 @@
 {
-  "key.categories.dominocities": "Domino Craft: Города",
-  "key.dominocities.open": "Открыть окно городов",
-  "key.dominocities.map": "Открыть карту мира"
+    "key.categories.dominocities":  "Domino Craft: Города",
+    "key.dominocities.open":  "Открыть окно городов",
+    "key.dominocities.map":  "Открыть карту мира",
+    "key.dominoskills.skills":  "Открыть профессии"
 }
