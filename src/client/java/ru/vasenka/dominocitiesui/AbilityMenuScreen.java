@@ -1,14 +1,19 @@
 package ru.vasenka.dominocitiesui;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
 
 /**
  * Быстрый выбор активки на клавишу G (открывается зажатием G). Клик по строке —
  * выбрать/экипировать активку; дальше короткий тап G применяет выбранное
  * (у капстоунов — активация с кулдауном, у «Лёгкой руки» — вкл/выкл).
+ * Здесь же кнопки-ярлыки на переносные станки строителя («Верстак в кармане» /wb,
+ * «Карманный камнерез» /cutter) — это просто быстрый запуск существующих команд,
+ * не завязано на переключение активки G.
  */
 public class AbilityMenuScreen extends Screen {
 
@@ -32,6 +37,8 @@ public class AbilityMenuScreen extends Screen {
             if (n != null && SkillsData.rank(n.id()) > 0) c++;
         }
         if (SkillsData.hasLightHand()) c++;
+        if (SkillsData.rank("builder_wb") > 0) c++;
+        if (SkillsData.rank("builder_cutter") > 0) c++;
         return c;
     }
 
@@ -62,7 +69,24 @@ public class AbilityMenuScreen extends Screen {
                     Component.literal((eq ? "✔ " : "") + "Лёгкая рука [" + state + "]"),
                     b -> { SkillsData.equippedLightHand = true; onClose(); })
                     .bounds(x, y, BTN_W, ROW_H).build());
+            y += ROW_H + GAP;
         }
+        if (SkillsData.rank("builder_wb") > 0) {
+            addRenderableWidget(Button.builder(Component.literal("Верстак в кармане (/wb)"),
+                    b -> runCommand("wb")).bounds(x, y, BTN_W, ROW_H).build());
+            y += ROW_H + GAP;
+        }
+        if (SkillsData.rank("builder_cutter") > 0) {
+            addRenderableWidget(Button.builder(Component.literal("Карманный камнерез (/cutter)"),
+                    b -> runCommand("cutter")).bounds(x, y, BTN_W, ROW_H).build());
+        }
+    }
+
+    /** Шлёт команду так же, как обычный ввод "/команда" в чате, и закрывает меню. */
+    private void runCommand(String command) {
+        ClientPacketListener conn = Minecraft.getInstance().getConnection();
+        if (conn != null) conn.sendCommand(command);
+        onClose();
     }
 
     @Override

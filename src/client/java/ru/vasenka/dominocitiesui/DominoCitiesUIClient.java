@@ -14,11 +14,11 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.ConnectScreen;
-import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.network.chat.Component;
@@ -34,6 +34,10 @@ public class DominoCitiesUIClient implements ClientModInitializer {
     private static KeyMapping mapKey;
     private static KeyMapping skillsKey;
     private static KeyMapping abilityKey;
+
+    /** Сервер последнего онлайн-сеанса — своя память, не завязана на mc.getCurrentServer()
+     *  (тот не гарантированно переживает дисконнект). Живёт, пока не закрыт клиент. */
+    private static ServerData lastServer;
 
     @Override
     public void onInitializeClient() {
@@ -188,6 +192,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             CityActions.requestState();
             SkillsActions.requestState();
+            if (client.getCurrentServer() != null) lastServer = client.getCurrentServer();
         });
 
         // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть залогиниться через
@@ -216,13 +221,22 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             return InteractionResult.PASS;
         });
 
-        // Кнопка «Переподключиться» в меню паузы — чтобы не выходить в лаунчер после дисконнекта/лага.
+        // Кнопка «Переподключиться» в главном меню — чтобы не лезть в лаунчер после дисконнекта/кика/краша
+        // до рабочего стола. Показывается только если в этом же запуске клиента уже был онлайн.
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
-            if (!(screen instanceof PauseScreen)) return;
-            if (client.getCurrentServer() == null) return; // одиночная игра — переподключаться некуда
+            if (!(screen instanceof TitleScreen) || lastServer == null) return;
+            // Позиция — сразу под нижней кнопкой основного стека меню (Одиночная/Сетевая/Выход
+            // и т.п.), не гадаем константы вёрстки ванили/форка. Мелкие иконки в углах
+            // (доступность/язык, обычно 20×20) в расчёт не берём — иначе кнопка уедет к самому низу.
+            int belowY = 4;
+            for (AbstractWidget wdg : Screens.getWidgets(screen)) {
+                if (wdg.getWidth() < 100) continue;
+                belowY = Math.max(belowY, wdg.getY() + wdg.getHeight());
+            }
+            int y = Math.min(belowY + 6, h - 26);
             Button reconnect = Button.builder(Component.literal("Переподключиться"),
-                            b -> reconnect(client))
-                    .bounds(w / 2 - 75, 8, 150, 20).build();
+                            b -> reconnect(client, screen))
+                    .bounds(w / 2 - 75, y, 150, 20).build();
             Screens.getWidgets(screen).add(reconnect);
         });
     }
@@ -246,12 +260,9 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         }
     }
 
-    /** Переподключение к текущему серверу без выхода в лаунчер. */
-    private static void reconnect(Minecraft mc) {
-        ServerData server = mc.getCurrentServer();
-        if (server == null) return;
-        mc.disconnectFromWorld(Component.literal("Переподключение…"));
-        ConnectScreen.startConnecting(new JoinMultiplayerScreen(new TitleScreen()), mc,
-                ServerAddress.parseString(server.ip), server, false, null);
+    /** Переподключение к последнему серверу с главного меню — без выхода в лаунчер. */
+    private static void reconnect(Minecraft mc, Screen from) {
+        if (lastServer == null) return;
+        ConnectScreen.startConnecting(from, mc, ServerAddress.parseString(lastServer.ip), lastServer, false, null);
     }
 }
