@@ -36,6 +36,7 @@ public final class CityActions {
     public static void disband()            { send(Protocol.A_DISBAND); }
     public static void toggleBorder()       { send(Protocol.A_TOGGLE_BORDER); }
     public static void expandCity()         { send(Protocol.A_EXPAND_CITY); }
+    public static void renameCity(String newName) { send(Protocol.A_RENAME_CITY, newName); }
     public static void buyBuff(String id)   { send(Protocol.A_BUY_BUFF, id); }
     public static void promote(String uuid) { send(Protocol.A_PROMOTE, uuid); }
     public static void demote(String uuid)  { send(Protocol.A_DEMOTE, uuid); }

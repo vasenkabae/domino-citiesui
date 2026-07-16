@@ -132,6 +132,9 @@ public class CityScreen extends Screen {
     private EditBox mayorDescInput;
     private String pendingMayorDesc = "";
     private boolean mayorDescSeeded = false; // seed pendingMayorDesc from CityData.description ровно один раз
+    private EditBox cityNameInput;
+    private String pendingCityName = "";
+    private boolean cityNameSeeded = false; // seed pendingCityName from CityData.cityName ровно один раз
 
     // Подсказка с полным текстом обрезанного поля (описание/комментарий/закон) — рисуется поверх в конце кадра.
     private int hoverMouseX = -1, hoverMouseY = -1;
@@ -153,6 +156,7 @@ public class CityScreen extends Screen {
         if (commentInput != null) pendingComment = commentInput.getValue();
         if (mayorDescInput != null) pendingMayorDesc = mayorDescInput.getValue();
         if (lawInput != null) pendingLaw = lawInput.getValue();
+        if (cityNameInput != null) pendingCityName = cityNameInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -167,7 +171,8 @@ public class CityScreen extends Screen {
         if (isFocused(input) || isFocused(titleInput) || isFocused(bountyNickInput)
                 || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
                 || isFocused(buildingNameInput) || isFocused(buildingDescInput)
-                || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)) return true;
+                || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)
+                || isFocused(cityNameInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -332,6 +337,19 @@ public class CityScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal(CityData.memberTitle),
                     b -> CityActions.setTitle((byte) 0, titleInput.getValue()))
                     .bounds(left() + 342, by, 94, 20).build());
+            by += 26;
+
+            // Переименование самого города — только мэр.
+            if (!cityNameSeeded) { pendingCityName = CityData.cityName; cityNameSeeded = true; }
+            cityNameInput = new EditBox(this.font, left(), by, right() - left() - 94, 20,
+                    Component.literal("Название города"));
+            cityNameInput.setMaxLength(20);
+            cityNameInput.setHint(Component.literal("Новое название города (3–20)"));
+            cityNameInput.setValue(pendingCityName);
+            addRenderableWidget(cityNameInput);
+            addRenderableWidget(Button.builder(Component.literal("Переименовать"),
+                    b -> CityActions.renameCity(cityNameInput.getValue()))
+                    .bounds(right() - 90, by, 90, 20).build());
             by += 26;
 
             if (!mayorDescSeeded) { pendingMayorDesc = CityData.description; mayorDescSeeded = true; }
