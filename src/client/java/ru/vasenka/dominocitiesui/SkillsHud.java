@@ -46,8 +46,13 @@ public class SkillsHud implements HudElement {
             shown++;
         }
 
-        // Статус активной способности — слева от хотбара (только если капстоун изучен).
-        int abilityProf = SkillsData.chooseAbilityProf();
+        // Статус выбранной активки — слева от хотбара.
+        if (SkillsData.equippedLightHand && SkillsData.hasLightHand()) {
+            String text = "Лёгкая рука " + (SkillsData.lightHandOn ? "ВКЛ" : "ВЫКЛ") + " — G";
+            int color = SkillsData.lightHandOn ? 0xC066D98F : 0x80A7ADB8;
+            g.text(mc.font, text, sw / 2 - 104 - mc.font.width(text), sh - 48, color);
+        }
+        int abilityProf = SkillsData.equippedLightHand ? -1 : SkillsData.chooseAbilityProf();
         if (abilityProf >= 0) {
             SkillsCatalog.Node cap = SkillsCatalog.capstone(abilityProf);
             SkillsData.ProfState st = SkillsData.prof[abilityProf];

@@ -72,6 +72,11 @@ public final class CityData {
     public static String officerTitle = "Офицер";
     public static String memberTitle = "Житель";
     public static String description = "";
+    // Платное расширение границы (config radius.expand): докуплено / потолок / шаг / цена.
+    public static int boughtRadius = 0;
+    public static int expandMax = 0;
+    public static int expandStep = 16;
+    public static int expandCost = 15;
 
     public static final List<TopEntry> top = new ArrayList<>();
     public static final List<CityInfo> directory = new ArrayList<>();
@@ -138,6 +143,10 @@ public final class CityData {
                 officerTitle = in.readUTF();
                 memberTitle = in.readUTF();
                 description = in.readUTF();
+                boughtRadius = in.readInt();
+                expandMax = in.readInt();
+                expandStep = in.readInt();
+                expandCost = in.readInt();
             }
         } catch (Exception ignored) { /* битый пакет — молча */ }
         refresh();

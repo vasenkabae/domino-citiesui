@@ -8,9 +8,20 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -90,7 +101,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_N,
                 KeyMapping.Category.MISC));
-        // Быстрая активация способности ряда 4 (последней использованной).
+        // Активка на G: короткий тап — применить выбранную, зажать — меню выбора активки.
         abilityKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.dominoskills.ability",
                 InputConstants.Type.KEYSYM,
@@ -118,18 +129,32 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                     SkillsActions.requestState();
                 }
             }
-            while (abilityKey.consumeClick()) {
-                if (client.player != null && client.screen == null) {
-                    int prof = SkillsData.chooseAbilityProf();
-                    if (prof >= 0) {
-                        SkillsData.lastAbilityProf = prof;
-                        SkillsActions.activate(prof);
-                    } else {
-                        client.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal(
-                                "Сначала изучи способность в ряду 4 древа (клавиша N)"), false);
-                    }
-                }
+        });
+
+        // G: короткий тап — применить выбранную активку; удержание (≥250 мс) — меню выбора.
+        final boolean[] gPrev = {false};
+        final long[] gStart = {0};
+        final boolean[] gMenuOpened = {false};
+        final boolean[] gArmed = {false}; // цикл засчитывается, только если нажатие началось без открытого экрана
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            while (abilityKey.consumeClick()) { /* сбрасываем буфер: состояние читаем через isDown */ }
+            boolean down = abilityKey.isDown();
+            long now = System.currentTimeMillis();
+            if (down && !gPrev[0]) {
+                gArmed[0] = client.screen == null;
+                gStart[0] = now;
+                gMenuOpened[0] = false;
             }
+            if (down && gArmed[0] && !gMenuOpened[0] && client.player != null && client.screen == null
+                    && now - gStart[0] >= 250) {
+                client.setScreen(new AbilityMenuScreen());
+                gMenuOpened[0] = true;
+            }
+            if (!down && gPrev[0] && gArmed[0] && !gMenuOpened[0]
+                    && client.player != null && client.screen == null) {
+                triggerAbility(client);
+            }
+            gPrev[0] = down;
         });
 
         // Пока открыта карта мира — периодически опрашиваем сервер, чтобы точки жителей
@@ -190,5 +215,43 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             }
             return InteractionResult.PASS;
         });
+
+        // Кнопка «Переподключиться» в меню паузы — чтобы не выходить в лаунчер после дисконнекта/лага.
+        ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            if (!(screen instanceof PauseScreen)) return;
+            if (client.getCurrentServer() == null) return; // одиночная игра — переподключаться некуда
+            Button reconnect = Button.builder(Component.literal("Переподключиться"),
+                            b -> reconnect(client))
+                    .bounds(w / 2 - 75, 8, 150, 20).build();
+            Screens.getWidgets(screen).add(reconnect);
+        });
+    }
+
+    /** Тап G: применить выбранную активку (капстоун — активация, «Лёгкая рука» — вкл/выкл). */
+    private static void triggerAbility(Minecraft client) {
+        if (SkillsData.equippedLightHand && SkillsData.hasLightHand()) {
+            SkillsActions.toggleLightHand();
+            return;
+        }
+        int prof = SkillsData.chooseAbilityProf();
+        if (prof >= 0) {
+            SkillsData.lastAbilityProf = prof;
+            SkillsActions.activate(prof);
+        } else if (SkillsData.hasLightHand()) {
+            SkillsData.equippedLightHand = true; // изучена только «Лёгкая рука» — её и переключаем
+            SkillsActions.toggleLightHand();
+        } else {
+            client.gui.setOverlayMessage(Component.literal(
+                    "Зажми G — выбери активку (сначала изучи в древе, N)"), false);
+        }
+    }
+
+    /** Переподключение к текущему серверу без выхода в лаунчер. */
+    private static void reconnect(Minecraft mc) {
+        ServerData server = mc.getCurrentServer();
+        if (server == null) return;
+        mc.disconnectFromWorld(Component.literal("Переподключение…"));
+        ConnectScreen.startConnecting(new JoinMultiplayerScreen(new TitleScreen()), mc,
+                ServerAddress.parseString(server.ip), server, false, null);
     }
 }

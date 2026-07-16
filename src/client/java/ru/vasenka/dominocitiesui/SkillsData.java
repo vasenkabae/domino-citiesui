@@ -29,6 +29,15 @@ public final class SkillsData {
 
     /** Профессия для быстрой активации клавишей G (последняя активированная из экрана). */
     public static int lastAbilityProf = -1;
+    /** «Лёгкая рука» выбрана как активка на G (тогда тап G переключает её вкл/выкл). */
+    public static boolean equippedLightHand = false;
+    /** Текущее состояние переключаемой «Лёгкой руки» (приходит со state). */
+    public static boolean lightHandOn = true;
+
+    /** Изучена ли «Лёгкая рука» (или «Рука мастера») — тогда её можно вешать на G. */
+    public static boolean hasLightHand() {
+        return rank("builder_hand") > 0 || rank("builder_master") > 0;
+    }
 
     /** Чью активку дёргать по G: последнюю использованную, иначе первую изученную. -1 — нет изученных. */
     public static int chooseAbilityProf() {
@@ -108,6 +117,7 @@ public final class SkillsData {
                 int rank = in.readByte();
                 talents.put(id, rank);
             }
+            lightHandOn = in.readBoolean();
             stateLoaded = true;
             protocolMismatch = false;
         } catch (Exception ignored) { /* битый пакет — молча */ }

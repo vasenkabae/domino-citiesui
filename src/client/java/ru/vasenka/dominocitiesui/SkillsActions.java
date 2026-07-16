@@ -25,6 +25,7 @@ public final class SkillsActions {
     public static void requestState()      { send(SkillsProtocol.A_REQUEST_STATE); }
     public static void learn(String id)    { send(SkillsProtocol.A_LEARN, id); }
     public static void reset()             { send(SkillsProtocol.A_RESET); }
+    public static void toggleLightHand()   { send(SkillsProtocol.A_TOGGLE_LIGHTHAND); }
 
     public static void activate(int profId) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();

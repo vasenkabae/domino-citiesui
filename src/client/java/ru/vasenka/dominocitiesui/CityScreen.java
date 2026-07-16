@@ -133,6 +133,10 @@ public class CityScreen extends Screen {
     private String pendingMayorDesc = "";
     private boolean mayorDescSeeded = false; // seed pendingMayorDesc from CityData.description ровно один раз
 
+    // Подсказка с полным текстом обрезанного поля (описание/комментарий/закон) — рисуется поверх в конце кадра.
+    private int hoverMouseX = -1, hoverMouseY = -1;
+    private String hoverTip = null;
+
     public CityScreen() {
         super(Component.literal("Города Domino Craft"));
     }
@@ -340,6 +344,17 @@ public class CityScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("Сохранить"),
                     b -> CityActions.setCityDescription(mayorDescInput.getValue()))
                     .bounds(right() - 90, by, 90, 20).build());
+            by += 26;
+
+            // Платное расширение границы города по чанкам (за алмазы).
+            boolean atMax = CityData.boughtRadius + CityData.expandStep > CityData.expandMax;
+            String exLabel = atMax
+                    ? "Граница: максимум (+" + CityData.expandMax + " блоков)"
+                    : "Расширить границу +" + CityData.expandStep + " (" + CityData.expandCost + " алм.)";
+            Button exBtn = Button.builder(Component.literal(exLabel), b -> CityActions.expandCity())
+                    .bounds(left(), by, right() - left(), 20).build();
+            exBtn.active = !atMax;
+            addRenderableWidget(exBtn);
         }
     }
 
@@ -1133,6 +1148,7 @@ public class CityScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
+        hoverMouseX = mouseX; hoverMouseY = mouseY; hoverTip = null;
 
         // Заголовок над панелью
         scaledText(g, "ГОРОДА DOMINO CRAFT", cx(), 9, 1.15f, GOLD, true);
@@ -1183,6 +1199,72 @@ public class CityScreen extends Screen {
             g.centeredText(this.font, CityData.lastResult, cx() + 2, this.height - 61,
                     CityData.lastOk ? WHITE : RED);
         }
+
+        // Подсказка с полным текстом поверх всего (если курсор над обрезанной строкой).
+        if (hoverTip != null) drawWrapTooltip(g, hoverTip);
+    }
+
+    // ── Текст: перенос по словам, укорачивание, подсказка с полным текстом ────
+
+    private String ellipsize(String s, int maxW) {
+        if (this.font.width(s) <= maxW) return s;
+        while (!s.isEmpty() && this.font.width(s + "…") > maxW) s = s.substring(0, s.length() - 1);
+        return s + "…";
+    }
+
+    /** Разбивает строку по словам на строки шириной ≤ maxW, не более maxLines (последняя с «…» при переполнении). */
+    private List<String> wrapLines(String text, int maxW, int maxLines) {
+        List<String> out = new ArrayList<>();
+        if (text == null || text.isEmpty()) return out;
+        StringBuilder line = new StringBuilder();
+        String[] words = text.split(" ");
+        for (int w = 0; w < words.length; w++) {
+            String probe = line.length() == 0 ? words[w] : line + " " + words[w];
+            if (this.font.width(probe) > maxW && line.length() > 0) {
+                out.add(line.toString());
+                if (out.size() == maxLines - 1) {
+                    StringBuilder last = new StringBuilder(words[w]);
+                    for (int k = w + 1; k < words.length; k++) last.append(' ').append(words[k]);
+                    out.add(ellipsize(last.toString(), maxW));
+                    return out;
+                }
+                line = new StringBuilder(words[w]);
+            } else {
+                line = new StringBuilder(probe);
+            }
+        }
+        if (line.length() > 0) out.add(line.toString());
+        return out;
+    }
+
+    /**
+     * Рисует строку, укороченную до maxW. Если она реально обрезана и курсор над ней —
+     * запоминает полный текст для подсказки (задача: длинные описания/поля видны целиком).
+     */
+    private void clipText(GuiGraphicsExtractor g, String full, int x, int y, int maxW, int color) {
+        String shown = ellipsize(full, maxW);
+        g.text(this.font, shown, x, y, color);
+        if (!shown.equals(full) && hoverMouseX >= x && hoverMouseX <= x + maxW
+                && hoverMouseY >= y - 1 && hoverMouseY <= y + 9) {
+            hoverTip = full;
+        }
+    }
+
+    private void drawWrapTooltip(GuiGraphicsExtractor g, String text) {
+        int w = 220;
+        List<String> lines = wrapLines(text, w - 12, 14);
+        int h = lines.size() * 11 + 10;
+        int x = Math.min(hoverMouseX + 12, this.width - w - 4);
+        int y = Math.min(hoverMouseY + 8, this.height - h - 4);
+        if (x < 2) x = 2;
+        if (y < 2) y = 2;
+        g.fill(x, y, x + w, y + h, 0xF0101216);
+        g.outline(x, y, w, h, GOLD_LINE);
+        int ty = y + 5;
+        for (String line : lines) {
+            g.text(this.font, line, x + 6, ty, WHITE);
+            ty += 11;
+        }
     }
 
     private void renderCity(GuiGraphicsExtractor g, int top) {
@@ -1205,13 +1287,7 @@ public class CityScreen extends Screen {
 
         String desc = CityData.description.isEmpty() ? "Без описания" : CityData.description;
         int descColor = CityData.description.isEmpty() ? DIM : GRAY;
-        if (this.font.width(desc) > right() - left()) {
-            while (!desc.isEmpty() && this.font.width(desc + "…") > right() - left()) {
-                desc = desc.substring(0, desc.length() - 1);
-            }
-            desc += "…";
-        }
-        g.text(this.font, desc, left(), top + 30, descColor);
+        clipText(g, desc, left(), top + 30, right() - left(), descColor);
 
         int y = top + 44;
         int shown = Math.min(8, CityData.members.size());
@@ -1303,13 +1379,7 @@ public class CityScreen extends Screen {
         if (dataReady) {
             String desc = CityData.cardDescription.isEmpty() ? "Без описания" : CityData.cardDescription;
             int descColor = CityData.cardDescription.isEmpty() ? DIM : GRAY;
-            if (this.font.width(desc) > right() - left()) {
-                while (!desc.isEmpty() && this.font.width(desc + "…") > right() - left()) {
-                    desc = desc.substring(0, desc.length() - 1);
-                }
-                desc += "…";
-            }
-            g.text(this.font, desc, left(), top + CARD_INFO_TOP, descColor);
+            clipText(g, desc, left(), top + CARD_INFO_TOP, right() - left(), descColor);
         }
 
         if (buildingFormOpen) {
@@ -1356,15 +1426,8 @@ public class CityScreen extends Screen {
             int nx = seg(g, tx, y + 4, b.name(), WHITE);
             seg(g, nx + 8, y + 4, BUILDING_DATE.format(new Date(b.createdAt())), DIM);
             g.text(this.font, "построил " + b.ownerName(), tx, y + 16, GRAY);
-            String desc = b.description();
-            if (!desc.isEmpty()) {
-                if (this.font.width(desc) > right() - tx - 8) {
-                    while (!desc.isEmpty() && this.font.width(desc + "…") > right() - tx - 8) {
-                        desc = desc.substring(0, desc.length() - 1);
-                    }
-                    desc += "…";
-                }
-                g.text(this.font, desc, tx, y + 27, DIM);
+            if (!b.description().isEmpty()) {
+                clipText(g, b.description(), tx, y + 27, right() - tx - 8, DIM);
             }
             y += BUILDING_ROW_H;
         }
@@ -1388,15 +1451,8 @@ public class CityScreen extends Screen {
             CityData.CommentInfo c = CityData.cardComments.get(i);
             int nx = seg(g, left() + 4, y + 3, c.authorName(), GOLD_BRIGHT);
             seg(g, nx + 6, y + 3, BUILDING_DATE.format(new Date(c.createdAt())), DIM);
-            String text = c.text();
             int maxW = right() - left() - (c.canDelete() ? 64 : 8);
-            if (this.font.width(text) > maxW) {
-                while (!text.isEmpty() && this.font.width(text + "…") > maxW) {
-                    text = text.substring(0, text.length() - 1);
-                }
-                text += "…";
-            }
-            g.text(this.font, text, left() + 4, y + 15, WHITE);
+            clipText(g, c.text(), left() + 4, y + 15, maxW, WHITE);
             y += COMMENT_ROW_H;
         }
         if (CityData.cardComments.size() > shown) {
@@ -1419,15 +1475,8 @@ public class CityScreen extends Screen {
         for (int i = 0; i < shown; i++) {
             CityData.LawInfo l = CityData.cardLaws.get(i);
             int nx = seg(g, left() + 4, y + 6, (i + 1) + ". ", GOLD);
-            String text = l.text();
             int maxW = right() - left() - (canEdit ? 64 : 8) - (nx - left() - 4);
-            if (this.font.width(text) > maxW) {
-                while (!text.isEmpty() && this.font.width(text + "…") > maxW) {
-                    text = text.substring(0, text.length() - 1);
-                }
-                text += "…";
-            }
-            g.text(this.font, text, nx, y + 6, WHITE);
+            clipText(g, l.text(), nx, y + 6, maxW, WHITE);
             y += LAW_ROW_H;
         }
         if (CityData.cardLaws.size() > shown) {

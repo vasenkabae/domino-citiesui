@@ -240,7 +240,7 @@ public class SkillScreen extends Screen {
 
         String pts = "Очки: " + SkillsData.pointsAvailable() + " свободно";
         g.text(this.font, pts, right() - this.font.width(pts), CONTENT_TOP + 2, GREEN);
-        String spent = "потрачено " + SkillsData.pointsSpent + " · предел " + SkillsData.pointsCap;
+        String spent = "потрачено " + SkillsData.pointsSpent + " · заработано " + SkillsData.pointsEarned;
         g.text(this.font, spent, right() - this.font.width(spent), CONTENT_TOP + 14, DIM);
     }
 
