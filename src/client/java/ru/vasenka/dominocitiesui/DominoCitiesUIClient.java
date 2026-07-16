@@ -22,6 +22,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
     private static KeyMapping openKey;
     private static KeyMapping mapKey;
     private static KeyMapping skillsKey;
+    private static KeyMapping abilityKey;
 
     @Override
     public void onInitializeClient() {
@@ -89,6 +90,12 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_N,
                 KeyMapping.Category.MISC));
+        // Быстрая активация способности ряда 4 (последней использованной).
+        abilityKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.dominoskills.ability",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_G,
+                KeyMapping.Category.MISC));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openKey.consumeClick()) {
@@ -109,6 +116,18 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 if (client.player != null && client.screen == null && !BuildingPhotoTaker.active()) {
                     client.setScreen(new SkillScreen());
                     SkillsActions.requestState();
+                }
+            }
+            while (abilityKey.consumeClick()) {
+                if (client.player != null && client.screen == null) {
+                    int prof = SkillsData.chooseAbilityProf();
+                    if (prof >= 0) {
+                        SkillsData.lastAbilityProf = prof;
+                        SkillsActions.activate(prof);
+                    } else {
+                        client.gui.setOverlayMessage(net.minecraft.network.chat.Component.literal(
+                                "Сначала изучи способность в ряду 4 древа (клавиша N)"), false);
+                    }
                 }
             }
         });

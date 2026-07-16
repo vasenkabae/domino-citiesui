@@ -22,6 +22,25 @@ public final class SkillsData {
         public int level;
         public int xpInto;
         public int xpNeed; // 0 = максимальный уровень
+        /** Активка ряда 4: локальные дедлайны (мс клиента), считаем обратный отсчёт сами. */
+        public long abilityCooldownUntil;
+        public long abilityActiveUntil;
+    }
+
+    /** Профессия для быстрой активации клавишей G (последняя активированная из экрана). */
+    public static int lastAbilityProf = -1;
+
+    /** Чью активку дёргать по G: последнюю использованную, иначе первую изученную. -1 — нет изученных. */
+    public static int chooseAbilityProf() {
+        if (lastAbilityProf >= 0) {
+            SkillsCatalog.Node n = SkillsCatalog.capstone(lastAbilityProf);
+            if (n != null && rank(n.id()) > 0) return lastAbilityProf;
+        }
+        for (int i = 0; i < PROF_COUNT; i++) {
+            SkillsCatalog.Node n = SkillsCatalog.capstone(i);
+            if (n != null && rank(n.id()) > 0) return i;
+        }
+        return -1;
     }
 
     public static final ProfState[] prof = new ProfState[PROF_COUNT];
@@ -69,11 +88,14 @@ public final class SkillsData {
         try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
             int ver = in.readInt();
             if (ver != SkillsProtocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; return; }
+            long now = System.currentTimeMillis();
             for (int i = 0; i < PROF_COUNT; i++) {
                 prof[i].totalXp = in.readLong();
                 prof[i].level = in.readInt();
                 prof[i].xpInto = in.readInt();
                 prof[i].xpNeed = in.readInt();
+                prof[i].abilityCooldownUntil = now + in.readInt() * 1000L;
+                prof[i].abilityActiveUntil = now + in.readInt() * 1000L;
             }
             pointsEarned = in.readInt();
             pointsSpent = in.readInt();

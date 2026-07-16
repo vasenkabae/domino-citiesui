@@ -44,8 +44,8 @@ public class SkillScreen extends Screen {
     private static final int CONTENT_TOP = 60;
     private static final int HEADER_H = 38;
     private static final int TREE_TOP = CONTENT_TOP + HEADER_H;
-    private static final int ROW_H = 62;      // подпись ряда + карточка + зазор
-    private static final int NODE_W = 140, NODE_H = 44;
+    private static final int ROW_H = 56;      // подпись ряда + карточка + зазор (4 ряда должны влезть)
+    private static final int NODE_W = 140, NODE_H = 42;
 
     private int tab = 0; // profId выбранной вкладки
     private Button resetBtn;
@@ -133,7 +133,7 @@ public class SkillScreen extends Screen {
             for (SkillsCatalog.Node n : SkillsCatalog.forProfession(tab)) {
                 int x = nodeX(n.col()), y = nodeY(n.tier());
                 if (event.x() >= x && event.x() < x + NODE_W && event.y() >= y && event.y() < y + NODE_H) {
-                    tryLearn(n);
+                    onNodeClick(n);
                     return true;
                 }
             }
@@ -141,8 +141,14 @@ public class SkillScreen extends Screen {
         return super.mouseClicked(event, doubleClick);
     }
 
-    private void tryLearn(SkillsCatalog.Node n) {
+    private void onNodeClick(SkillsCatalog.Node n) {
         int rank = SkillsData.rank(n.id());
+        // Изученный капстоун: клик = активировать (сервер сам проверит перезарядку).
+        if (n.tier() == 4 && rank > 0) {
+            SkillsData.lastAbilityProf = tab;
+            SkillsActions.activate(tab);
+            return;
+        }
         if (rank >= n.maxRank()) return;
         if (SkillsData.prof[tab].level < SkillsCatalog.tierGate(n.tier())) return;
         if (SkillsData.pointsAvailable() < n.cost()) return;
@@ -202,13 +208,10 @@ public class SkillScreen extends Screen {
         drawHeader(g);
         SkillsCatalog.Node hovered = drawTree(g, mouseX, mouseY);
 
-        // Тизер второго этапа
-        g.centeredText(this.font, "Ряд 4 — активные способности — скоро", cx(), rowTop(4) + 2, DIM);
-
-        // Тост результата
+        // Тост результата — справа от кнопки сброса (низ панели занят рядом 4)
         if (!SkillsData.lastResult.isEmpty()
                 && System.currentTimeMillis() - SkillsData.lastResultTime < 5000) {
-            g.centeredText(this.font, SkillsData.lastResult, cx(), py2() - 40,
+            g.text(this.font, SkillsData.lastResult, left() + 190, py2() - 20,
                     SkillsData.lastOk ? GREEN : RED);
         }
 
@@ -246,9 +249,11 @@ public class SkillScreen extends Screen {
         SkillsCatalog.Node hovered = null;
         int profLevel = SkillsData.prof[tab].level;
 
-        for (int tier = 1; tier <= 3; tier++) {
+        for (int tier = 1; tier <= 4; tier++) {
             int gate = SkillsCatalog.tierGate(tier);
-            String label = tier == 1 ? "Ряд 1" : "Ряд " + tier + " — с " + gate + " уровня";
+            String label = tier == 1 ? "Ряд 1"
+                    : tier == 4 ? "Ряд 4 — с " + gate + " уровня — активная способность"
+                    : "Ряд " + tier + " — с " + gate + " уровня";
             g.text(this.font, label, left(), rowTop(tier) + 1, profLevel >= gate ? GRAY : DIM);
             g.horizontalLine(left() + this.font.width(label) + 6, right(), rowTop(tier) + 5, 0x14FFFFFF);
         }
@@ -281,7 +286,21 @@ public class SkillScreen extends Screen {
 
             String status;
             int statusColor;
-            if (maxed) { status = "Изучено"; statusColor = GOLD; }
+            if (n.tier() == 4 && rank > 0) {
+                // Изученный капстоун: живой статус активки.
+                long now = System.currentTimeMillis();
+                SkillsData.ProfState st = SkillsData.prof[tab];
+                if (st.abilityActiveUntil > now) {
+                    status = "АКТИВНА " + mmss(st.abilityActiveUntil - now);
+                    statusColor = GOLD_BRIGHT;
+                } else if (st.abilityCooldownUntil > now) {
+                    status = "Перезарядка " + mmss(st.abilityCooldownUntil - now);
+                    statusColor = DIM;
+                } else {
+                    status = "Готова — клик или G";
+                    statusColor = GREEN;
+                }
+            } else if (maxed) { status = "Изучено"; statusColor = GOLD; }
             else if (!unlocked) { status = "Закрыто до " + SkillsCatalog.tierGate(n.tier()) + " ур."; statusColor = DIM; }
             else {
                 status = (rank > 0 ? "Улучшить: " : "Изучить: ") + n.cost() + " оч.";
@@ -313,6 +332,11 @@ public class SkillScreen extends Screen {
             g.text(this.font, line, x + 6, ty, WHITE);
             ty += 11;
         }
+    }
+
+    static String mmss(long ms) {
+        long total = Math.max(0, ms / 1000);
+        return total >= 60 ? (total / 60) + ":" + String.format("%02d", total % 60) : total + " с";
     }
 
     // ── Утилиты текста ───────────────────────────────────────────────────────

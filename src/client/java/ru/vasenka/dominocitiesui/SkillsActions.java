@@ -25,4 +25,16 @@ public final class SkillsActions {
     public static void requestState()      { send(SkillsProtocol.A_REQUEST_STATE); }
     public static void learn(String id)    { send(SkillsProtocol.A_LEARN, id); }
     public static void reset()             { send(SkillsProtocol.A_RESET); }
+
+    public static void activate(int profId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(SkillsProtocol.VERSION);
+            out.writeByte(SkillsProtocol.A_ACTIVATE);
+            out.writeByte(profId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new SkillsPayloads.Action(bos.toByteArray()));
+    }
 }

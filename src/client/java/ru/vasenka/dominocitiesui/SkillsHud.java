@@ -46,6 +46,26 @@ public class SkillsHud implements HudElement {
             shown++;
         }
 
+        // Статус активной способности — слева от хотбара (только если капстоун изучен).
+        int abilityProf = SkillsData.chooseAbilityProf();
+        if (abilityProf >= 0) {
+            SkillsCatalog.Node cap = SkillsCatalog.capstone(abilityProf);
+            SkillsData.ProfState st = SkillsData.prof[abilityProf];
+            String text;
+            int color;
+            if (st.abilityActiveUntil > now) {
+                text = cap.name() + " " + SkillScreen.mmss(st.abilityActiveUntil - now);
+                color = 0xE0F2B94E;
+            } else if (st.abilityCooldownUntil > now) {
+                text = cap.name() + " " + SkillScreen.mmss(st.abilityCooldownUntil - now);
+                color = 0x80767D8A;
+            } else {
+                text = cap.name() + " — G";
+                color = 0x80A7ADB8;
+            }
+            g.text(mc.font, text, sw / 2 - 104 - mc.font.width(text), sh - 48, color);
+        }
+
         // Левел-ап: одно сообщение за раз, по центру над серединой экрана.
         Iterator<SkillsData.LevelToast> lit = SkillsData.levelToasts.iterator();
         while (lit.hasNext()) {
