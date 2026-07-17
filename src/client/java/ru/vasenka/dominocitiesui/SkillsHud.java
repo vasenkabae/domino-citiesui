@@ -54,15 +54,18 @@ public class SkillsHud implements HudElement {
         }
         int abilityProf = SkillsData.equippedLightHand ? -1 : SkillsData.chooseAbilityProf();
         if (abilityProf >= 0) {
-            SkillsCatalog.Node cap = SkillsCatalog.capstone(abilityProf);
+            int tier = SkillsData.lastAbilityTier;
+            SkillsCatalog.Node cap = SkillsCatalog.capstone(abilityProf, tier);
             SkillsData.ProfState st = SkillsData.prof[abilityProf];
+            long activeUntil = tier == 7 ? st.ability7ActiveUntil : st.abilityActiveUntil;
+            long cdUntil = tier == 7 ? st.ability7CooldownUntil : st.abilityCooldownUntil;
             String text;
             int color;
-            if (st.abilityActiveUntil > now) {
-                text = cap.name() + " " + SkillScreen.mmss(st.abilityActiveUntil - now);
+            if (activeUntil > now) {
+                text = cap.name() + " " + SkillScreen.mmss(activeUntil - now);
                 color = 0xE0F2B94E;
-            } else if (st.abilityCooldownUntil > now) {
-                text = cap.name() + " " + SkillScreen.mmss(st.abilityCooldownUntil - now);
+            } else if (cdUntil > now) {
+                text = cap.name() + " " + SkillScreen.mmss(cdUntil - now);
                 color = 0x80767D8A;
             } else {
                 text = cap.name() + " — G";

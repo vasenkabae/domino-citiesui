@@ -32,9 +32,11 @@ public class AbilityMenuScreen extends Screen {
 
     private int rowCount() {
         int c = 0;
-        for (int i = 0; i < SkillsData.PROF_COUNT; i++) {
-            SkillsCatalog.Node n = SkillsCatalog.capstone(i);
-            if (n != null && SkillsData.rank(n.id()) > 0) c++;
+        for (int tier : new int[]{4, 7}) {
+            for (int i = 0; i < SkillsData.PROF_COUNT; i++) {
+                SkillsCatalog.Node n = SkillsCatalog.capstone(i, tier);
+                if (n != null && SkillsData.rank(n.id()) > 0) c++;
+            }
         }
         if (SkillsData.hasLightHand()) c++;
         if (SkillsData.rank("builder_wb") > 0) c++;
@@ -52,16 +54,21 @@ public class AbilityMenuScreen extends Screen {
     protected void init() {
         int y = firstRowY();
         int x = cx() - BTN_W / 2;
-        for (int i = 0; i < SkillsData.PROF_COUNT; i++) {
-            SkillsCatalog.Node n = SkillsCatalog.capstone(i);
-            if (n == null || SkillsData.rank(n.id()) == 0) continue;
-            boolean eq = !SkillsData.equippedLightHand && SkillsData.lastAbilityProf == i;
-            final int prof = i;
-            addRenderableWidget(Button.builder(
-                    Component.literal((eq ? "✔ " : "") + n.name()),
-                    b -> { SkillsData.equippedLightHand = false; SkillsData.lastAbilityProf = prof; onClose(); })
-                    .bounds(x, y, BTN_W, ROW_H).build());
-            y += ROW_H + GAP;
+        for (int tier : new int[]{4, 7}) {
+            for (int i = 0; i < SkillsData.PROF_COUNT; i++) {
+                SkillsCatalog.Node n = SkillsCatalog.capstone(i, tier);
+                if (n == null || SkillsData.rank(n.id()) == 0) continue;
+                boolean eq = !SkillsData.equippedLightHand
+                        && SkillsData.lastAbilityProf == i && SkillsData.lastAbilityTier == tier;
+                final int prof = i;
+                final int t = tier;
+                addRenderableWidget(Button.builder(
+                        Component.literal((eq ? "✔ " : "") + n.name()),
+                        b -> { SkillsData.equippedLightHand = false; SkillsData.lastAbilityProf = prof;
+                               SkillsData.lastAbilityTier = t; onClose(); })
+                        .bounds(x, y, BTN_W, ROW_H).build());
+                y += ROW_H + GAP;
+            }
         }
         if (SkillsData.hasLightHand()) {
             boolean eq = SkillsData.equippedLightHand;

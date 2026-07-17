@@ -91,17 +91,20 @@ public class SkillScreen extends Screen {
         };
     }
 
-    /** Высота ряда — сжимается, если 5 рядов не влезают в экран (мелкие логические разрешения). */
+    /** Высота ряда — сжимается, если 7 рядов не влезают в экран (мелкие логические разрешения). */
     private int rowH() {
         int avail = py2() - 34 - TREE_TOP; // до кнопки сброса
-        return Math.min(ROW_H, Math.max(40, avail / 5));
+        return Math.min(ROW_H, Math.max(28, avail / 7));
     }
 
-    private int nodeH() { return rowH() - 14; } // 12px подпись ряда + 2px зазор
+    /** Совсем тесно — прячем подписи рядов и пипсы, оставляя место узлам. */
+    private boolean compact() { return rowH() < 44; }
+
+    private int nodeH() { return rowH() - (compact() ? 2 : 14); }
 
     private int rowTop(int tier) { return TREE_TOP + (tier - 1) * rowH(); }
 
-    private int nodeY(int tier) { return rowTop(tier) + 12; }
+    private int nodeY(int tier) { return rowTop(tier) + (compact() ? 1 : 12); }
 
     @Override
     protected void init() {
@@ -151,10 +154,11 @@ public class SkillScreen extends Screen {
 
     private void onNodeClick(SkillsCatalog.Node n) {
         int rank = SkillsData.rank(n.id());
-        // Изученный капстоун: клик = активировать (сервер сам проверит перезарядку).
-        if (n.tier() == 4 && rank > 0) {
+        // Изученная активка (ряд 4 или 7): клик = активировать (сервер сам проверит перезарядку).
+        if ((n.tier() == 4 || n.tier() == 7) && rank > 0) {
             SkillsData.lastAbilityProf = tab;
-            SkillsActions.activate(tab);
+            SkillsData.lastAbilityTier = n.tier();
+            SkillsActions.activate(tab, n.tier());
             return;
         }
         if (rank >= n.maxRank()) return;
@@ -257,14 +261,16 @@ public class SkillScreen extends Screen {
         SkillsCatalog.Node hovered = null;
         int profLevel = SkillsData.prof[tab].level;
 
-        for (int tier = 1; tier <= 5; tier++) {
-            int gate = SkillsCatalog.tierGate(tier);
-            String label = tier == 1 ? "Ряд 1"
-                    : tier == 4 ? "Ряд 4 — с " + gate + " уровня — активная способность"
-                    : tier == 5 ? "Ряд 5 — с " + gate + " уровня — эндгейм"
-                    : "Ряд " + tier + " — с " + gate + " уровня";
-            g.text(this.font, label, left(), rowTop(tier) + 1, profLevel >= gate ? GRAY : DIM);
-            g.horizontalLine(left() + this.font.width(label) + 6, right(), rowTop(tier) + 5, 0x14FFFFFF);
+        if (!compact()) {
+            for (int tier = 1; tier <= 7; tier++) {
+                int gate = SkillsCatalog.tierGate(tier);
+                String label = tier == 1 ? "Ряд 1"
+                        : tier == 4 ? "Ряд 4 — с " + gate + " уровня — активная способность"
+                        : tier == 7 ? "Ряд 7 — с " + gate + " уровня — вторая активка"
+                        : "Ряд " + tier + " — с " + gate + " уровня";
+                g.text(this.font, label, left(), rowTop(tier) + 1, profLevel >= gate ? GRAY : DIM);
+                g.horizontalLine(left() + this.font.width(label) + 6, right(), rowTop(tier) + 5, 0x14FFFFFF);
+            }
         }
 
         for (SkillsCatalog.Node n : SkillsCatalog.forProfession(tab)) {
@@ -284,8 +290,8 @@ public class SkillScreen extends Screen {
             int nameColor = maxed ? GOLD_BRIGHT : rank > 0 ? GOLD : unlocked ? WHITE : DIM;
             g.text(this.font, fit(n.name(), NODE_W - 12), x + 6, y + 5, nameColor);
 
-            // Пипсы рангов для многоранговых
-            if (n.maxRank() > 1) {
+            // Пипсы рангов для многоранговых (в тесном режиме — только тултип)
+            if (n.maxRank() > 1 && !compact()) {
                 int pipX = x + 6;
                 int pipY = y + 18;
                 for (int i = 0; i < n.maxRank(); i++) {
@@ -295,15 +301,17 @@ public class SkillScreen extends Screen {
 
             String status;
             int statusColor;
-            if (n.tier() == 4 && rank > 0) {
-                // Изученный капстоун: живой статус активки.
+            if ((n.tier() == 4 || n.tier() == 7) && rank > 0) {
+                // Изученная активка: живой статус (у ряда 7 — своя пара таймеров).
                 long now = System.currentTimeMillis();
                 SkillsData.ProfState st = SkillsData.prof[tab];
-                if (st.abilityActiveUntil > now) {
-                    status = "АКТИВНА " + mmss(st.abilityActiveUntil - now);
+                long activeUntil = n.tier() == 7 ? st.ability7ActiveUntil : st.abilityActiveUntil;
+                long cdUntil = n.tier() == 7 ? st.ability7CooldownUntil : st.abilityCooldownUntil;
+                if (activeUntil > now) {
+                    status = "АКТИВНА " + mmss(activeUntil - now);
                     statusColor = GOLD_BRIGHT;
-                } else if (st.abilityCooldownUntil > now) {
-                    status = "Перезарядка " + mmss(st.abilityCooldownUntil - now);
+                } else if (cdUntil > now) {
+                    status = "Перезарядка " + mmss(cdUntil - now);
                     statusColor = DIM;
                 } else {
                     status = "Готова — клик или G";

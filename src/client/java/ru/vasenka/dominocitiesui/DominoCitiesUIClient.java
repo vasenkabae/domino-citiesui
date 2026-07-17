@@ -278,7 +278,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         int prof = SkillsData.chooseAbilityProf();
         if (prof >= 0) {
             SkillsData.lastAbilityProf = prof;
-            SkillsActions.activate(prof);
+            SkillsActions.activate(prof, SkillsData.lastAbilityTier);
         } else if (SkillsData.hasLightHand()) {
             SkillsData.equippedLightHand = true; // изучена только «Лёгкая рука» — её и переключаем
             SkillsActions.toggleLightHand();

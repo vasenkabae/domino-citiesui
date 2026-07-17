@@ -27,12 +27,13 @@ public final class SkillsActions {
     public static void reset()             { send(SkillsProtocol.A_RESET); }
     public static void toggleLightHand()   { send(SkillsProtocol.A_TOGGLE_LIGHTHAND); }
 
-    public static void activate(int profId) {
+    public static void activate(int profId, int tier) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try (DataOutputStream out = new DataOutputStream(bos)) {
             out.writeInt(SkillsProtocol.VERSION);
             out.writeByte(SkillsProtocol.A_ACTIVATE);
             out.writeByte(profId);
+            out.writeByte(tier);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

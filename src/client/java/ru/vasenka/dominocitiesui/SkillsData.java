@@ -13,9 +13,9 @@ import java.util.Map;
 public final class SkillsData {
     private SkillsData() {}
 
-    public static final int PROF_COUNT = 6;
+    public static final int PROF_COUNT = 7;
     public static final String[] PROF_TITLES =
-            {"Шахтёр", "Фермер", "Охотник", "Рыбак", "Строитель", "Исследователь"};
+            {"Шахтёр", "Фермер", "Охотник", "Рыбак", "Строитель", "Исследователь", "Лесоруб"};
 
     public static class ProfState {
         public long totalXp;
@@ -25,10 +25,15 @@ public final class SkillsData {
         /** Активка ряда 4: локальные дедлайны (мс клиента), считаем обратный отсчёт сами. */
         public long abilityCooldownUntil;
         public long abilityActiveUntil;
+        /** Активка ряда 7 (v5) — своя пара дедлайнов. */
+        public long ability7CooldownUntil;
+        public long ability7ActiveUntil;
     }
 
     /** Профессия для быстрой активации клавишей G (последняя активированная из экрана). */
     public static int lastAbilityProf = -1;
+    /** Ряд выбранной активки: 4 (капстоун) или 7 (вторая активка). */
+    public static int lastAbilityTier = 4;
     /** «Лёгкая рука» выбрана как активка на G (тогда тап G переключает её вкл/выкл). */
     public static boolean equippedLightHand = false;
     /** Текущее состояние переключаемой «Лёгкой руки» (приходит со state). */
@@ -42,12 +47,17 @@ public final class SkillsData {
     /** Чью активку дёргать по G: последнюю использованную, иначе первую изученную. -1 — нет изученных. */
     public static int chooseAbilityProf() {
         if (lastAbilityProf >= 0) {
-            SkillsCatalog.Node n = SkillsCatalog.capstone(lastAbilityProf);
+            SkillsCatalog.Node n = SkillsCatalog.capstone(lastAbilityProf, lastAbilityTier);
             if (n != null && rank(n.id()) > 0) return lastAbilityProf;
         }
-        for (int i = 0; i < PROF_COUNT; i++) {
-            SkillsCatalog.Node n = SkillsCatalog.capstone(i);
-            if (n != null && rank(n.id()) > 0) return i;
+        for (int tier : new int[]{4, 7}) {
+            for (int i = 0; i < PROF_COUNT; i++) {
+                SkillsCatalog.Node n = SkillsCatalog.capstone(i, tier);
+                if (n != null && rank(n.id()) > 0) {
+                    lastAbilityTier = tier;
+                    return i;
+                }
+            }
         }
         return -1;
     }
@@ -105,6 +115,8 @@ public final class SkillsData {
                 prof[i].xpNeed = in.readInt();
                 prof[i].abilityCooldownUntil = now + in.readInt() * 1000L;
                 prof[i].abilityActiveUntil = now + in.readInt() * 1000L;
+                prof[i].ability7CooldownUntil = now + in.readInt() * 1000L;
+                prof[i].ability7ActiveUntil = now + in.readInt() * 1000L;
             }
             pointsEarned = in.readInt();
             pointsSpent = in.readInt();
