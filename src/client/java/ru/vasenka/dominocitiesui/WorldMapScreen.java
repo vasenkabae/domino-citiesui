@@ -39,6 +39,7 @@ public class WorldMapScreen extends Screen {
     private static final int MAP_OTHER_LINE = 0x906FA0D0;
     private static final int TEAMMATE_DOT = 0xFF6FB0E0;
     private static final int MARKER_COLOR = 0xFFE0B040;
+    private static final int BUILDING_COLOR = 0xFFE07B4A;
 
     private static final int PANEL_MARGIN = 20;
     private static final int CONTENT_TOP = 44;
@@ -276,6 +277,15 @@ public class WorldMapScreen extends Screen {
             g.fill(sx - 3, sy - 5, sx + 3, sy - 3, MARKER_COLOR);
         }
 
+        // Постройки городов — «домик»: корпус + крыша.
+        for (CityData.MapBuildingInfo b : CityData.mapBuildings) {
+            if (!b.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(b.x()), sy = (int) worldToScreenZ(b.z());
+            g.fill(sx - 3, sy - 1, sx + 4, sy + 4, BUILDING_COLOR);
+            g.fill(sx - 2, sy - 3, sx + 3, sy - 1, BUILDING_COLOR);
+            g.fill(sx - 1, sy - 4, sx + 2, sy - 3, BUILDING_COLOR);
+        }
+
         var player = Minecraft.getInstance().player;
         if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
             int sx = (int) worldToScreenX(player.getX()), sz = (int) worldToScreenZ(player.getZ());
@@ -303,7 +313,7 @@ public class WorldMapScreen extends Screen {
         }
         g.text(this.font, "серое — там ещё никто не бывал  ·  колесо — зум, ЛКМ+тяни — двигать карту",
                 px1() + 12, boxY1() - 22, DIM);
-        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  ПКМ по метке — удалить",
+        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  домик — постройка (наведи курсор)  ·  ПКМ по метке — удалить",
                 px1() + 12, boxY1() - 10, DIM);
 
         for (CityData.MapCityInfo c : CityData.mapCities) {
@@ -320,6 +330,43 @@ public class WorldMapScreen extends Screen {
             if (!inBox(sx, sy)) continue;
             if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 8) {
                 g.text(this.font, m.name(), sx + 6, sy - 8, GOLD_BRIGHT);
+            }
+        }
+
+        // Постройка под курсором — всплывающая карточка: название, город, фото.
+        CityData.MapBuildingInfo hoverBuilding = null;
+        for (CityData.MapBuildingInfo b : CityData.mapBuildings) {
+            if (!b.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(b.x()), sy = (int) worldToScreenZ(b.z());
+            if (!inBox(sx, sy)) continue;
+            if (Math.abs(mouseX - sx) <= 5 && Math.abs(mouseY - sy) <= 5) hoverBuilding = b;
+        }
+        if (hoverBuilding != null) drawBuildingTooltip(g, hoverBuilding, mouseX, mouseY);
+    }
+
+    private void drawBuildingTooltip(GuiGraphicsExtractor g, CityData.MapBuildingInfo b, int mouseX, int mouseY) {
+        int photoW = 120, photoH = 68; // 16:9, как сами фото построек
+        boolean hasPhoto = !b.photoId().isEmpty();
+        int textW = Math.max(this.font.width(b.name()), this.font.width("город: " + b.cityName()));
+        int w = Math.max(hasPhoto ? photoW : 0, textW) + 12;
+        int h = hasPhoto ? 30 + photoH + 6 : 30;
+        int x = Math.min(mouseX + 10, px2() - w - 4);
+        int y = Math.min(mouseY + 10, py2() - h - 4);
+        if (y < py1() + 4) y = py1() + 4;
+        g.fill(x, y, x + w, y + h, 0xF0101116);
+        g.outline(x, y, w, h, GOLD_LINE);
+        g.text(this.font, b.name(), x + 6, y + 6, GOLD_BRIGHT);
+        g.text(this.font, "город: " + b.cityName(), x + 6, y + 17, GRAY);
+        if (hasPhoto) {
+            int py0 = y + 30;
+            g.fill(x + 6, py0, x + 6 + photoW, py0 + photoH, 0x30000000);
+            Identifier tex = BuildingPhotos.get(b.photoId());
+            if (tex != null) {
+                int[] sz = BuildingPhotos.size(b.photoId());
+                g.blit(RenderPipelines.GUI_TEXTURED, tex, x + 6, py0, 0f, 0f,
+                        photoW, photoH, sz[0], sz[1], sz[0], sz[1]);
+            } else {
+                g.centeredText(this.font, "фото загружается…", x + w / 2, py0 + photoH / 2 - 4, DIM);
             }
         }
     }

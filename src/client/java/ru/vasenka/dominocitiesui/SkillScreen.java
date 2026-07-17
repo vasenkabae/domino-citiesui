@@ -44,8 +44,8 @@ public class SkillScreen extends Screen {
     private static final int CONTENT_TOP = 60;
     private static final int HEADER_H = 38;
     private static final int TREE_TOP = CONTENT_TOP + HEADER_H;
-    private static final int ROW_H = 56;      // подпись ряда + карточка + зазор (4 ряда должны влезть)
-    private static final int NODE_W = 140, NODE_H = 42;
+    private static final int ROW_H = 56;      // подпись ряда + карточка + зазор — верхний предел
+    private static final int NODE_W = 140;
 
     private int tab = 0; // profId выбранной вкладки
     private Button resetBtn;
@@ -91,7 +91,15 @@ public class SkillScreen extends Screen {
         };
     }
 
-    private int rowTop(int tier) { return TREE_TOP + (tier - 1) * ROW_H; }
+    /** Высота ряда — сжимается, если 5 рядов не влезают в экран (мелкие логические разрешения). */
+    private int rowH() {
+        int avail = py2() - 34 - TREE_TOP; // до кнопки сброса
+        return Math.min(ROW_H, Math.max(40, avail / 5));
+    }
+
+    private int nodeH() { return rowH() - 14; } // 12px подпись ряда + 2px зазор
+
+    private int rowTop(int tier) { return TREE_TOP + (tier - 1) * rowH(); }
 
     private int nodeY(int tier) { return rowTop(tier) + 12; }
 
@@ -132,7 +140,7 @@ public class SkillScreen extends Screen {
         if (!SkillsData.protocolMismatch && SkillsData.stateLoaded) {
             for (SkillsCatalog.Node n : SkillsCatalog.forProfession(tab)) {
                 int x = nodeX(n.col()), y = nodeY(n.tier());
-                if (event.x() >= x && event.x() < x + NODE_W && event.y() >= y && event.y() < y + NODE_H) {
+                if (event.x() >= x && event.x() < x + NODE_W && event.y() >= y && event.y() < y + nodeH()) {
                     onNodeClick(n);
                     return true;
                 }
@@ -249,10 +257,11 @@ public class SkillScreen extends Screen {
         SkillsCatalog.Node hovered = null;
         int profLevel = SkillsData.prof[tab].level;
 
-        for (int tier = 1; tier <= 4; tier++) {
+        for (int tier = 1; tier <= 5; tier++) {
             int gate = SkillsCatalog.tierGate(tier);
             String label = tier == 1 ? "Ряд 1"
                     : tier == 4 ? "Ряд 4 — с " + gate + " уровня — активная способность"
+                    : tier == 5 ? "Ряд 5 — с " + gate + " уровня — эндгейм"
                     : "Ряд " + tier + " — с " + gate + " уровня";
             g.text(this.font, label, left(), rowTop(tier) + 1, profLevel >= gate ? GRAY : DIM);
             g.horizontalLine(left() + this.font.width(label) + 6, right(), rowTop(tier) + 5, 0x14FFFFFF);
@@ -264,13 +273,13 @@ public class SkillScreen extends Screen {
             boolean maxed = rank >= n.maxRank();
             boolean unlocked = profLevel >= SkillsCatalog.tierGate(n.tier());
             boolean afford = SkillsData.pointsAvailable() >= n.cost();
-            boolean hover = mouseX >= x && mouseX < x + NODE_W && mouseY >= y && mouseY < y + NODE_H;
+            boolean hover = mouseX >= x && mouseX < x + NODE_W && mouseY >= y && mouseY < y + nodeH();
             if (hover) hovered = n;
 
-            g.fill(x, y, x + NODE_W, y + NODE_H, NODE_BG);
-            if (hover && unlocked && !maxed) g.fill(x, y, x + NODE_W, y + NODE_H, 0x14FFFFFF);
+            g.fill(x, y, x + NODE_W, y + nodeH(), NODE_BG);
+            if (hover && unlocked && !maxed) g.fill(x, y, x + NODE_W, y + nodeH(), 0x14FFFFFF);
             int edge = maxed || rank > 0 ? NODE_EDGE_GOLD : unlocked ? NODE_EDGE_ON : NODE_EDGE_OFF;
-            g.outline(x, y, NODE_W, NODE_H, edge);
+            g.outline(x, y, NODE_W, nodeH(), edge);
 
             int nameColor = maxed ? GOLD_BRIGHT : rank > 0 ? GOLD : unlocked ? WHITE : DIM;
             g.text(this.font, fit(n.name(), NODE_W - 12), x + 6, y + 5, nameColor);
@@ -306,7 +315,7 @@ public class SkillScreen extends Screen {
                 status = (rank > 0 ? "Улучшить: " : "Изучить: ") + n.cost() + " оч.";
                 statusColor = afford ? GREEN : RED;
             }
-            g.text(this.font, status, x + 6, y + NODE_H - 12, statusColor);
+            g.text(this.font, status, x + 6, y + nodeH() - 12, statusColor);
         }
         return hovered;
     }

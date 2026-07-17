@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class SkillsProtocol {
     private SkillsProtocol() {}
 
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
 
     public static final String NS = "dominoskills";
     public static final String CH_ACTION = "action";

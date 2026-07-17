@@ -50,6 +50,8 @@ public final class CityData {
     public record TeammateInfo(String name, String world, int x, int z) {}
     /** Личная метка на карте — видна только владельцу. */
     public record MarkerInfo(int id, String name, String world, int x, int z, long createdAt) {}
+    /** Постройка из витрины города — метка на карте мира (наведение: название + фото). */
+    public record MapBuildingInfo(String name, String cityName, String world, int x, int z, String photoId) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -106,6 +108,7 @@ public final class CityData {
     public static final List<MapCityInfo> mapCities = new ArrayList<>();
     public static final List<TeammateInfo> mapTeammates = new ArrayList<>();
     public static final List<MarkerInfo> mapMarkers = new ArrayList<>();
+    public static final List<MapBuildingInfo> mapBuildings = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -381,6 +384,17 @@ public final class CityData {
                 int mx = in.readInt(), mz = in.readInt();
                 long createdAt = in.readLong();
                 mapMarkers.add(new MarkerInfo(id, mName, mWorld, mx, mz, createdAt));
+            }
+
+            mapBuildings.clear();
+            int bn = in.readInt();
+            for (int i = 0; i < bn; i++) {
+                String bName = in.readUTF();
+                String bCity = in.readUTF();
+                String bWorld = in.readUTF();
+                int bx = in.readInt(), bz = in.readInt();
+                String photoId = in.readUTF();
+                mapBuildings.add(new MapBuildingInfo(bName, bCity, bWorld, bx, bz, photoId));
             }
         } catch (Exception ignored) { }
         refresh();

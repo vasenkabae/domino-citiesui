@@ -39,6 +39,7 @@ public class AbilityMenuScreen extends Screen {
         if (SkillsData.hasLightHand()) c++;
         if (SkillsData.rank("builder_wb") > 0) c++;
         if (SkillsData.rank("builder_cutter") > 0) c++;
+        if (SkillsData.rank("builder_anvil") > 0) c++;
         return c;
     }
 
@@ -79,6 +80,11 @@ public class AbilityMenuScreen extends Screen {
         if (SkillsData.rank("builder_cutter") > 0) {
             addRenderableWidget(Button.builder(Component.literal("Карманный камнерез (/cutter)"),
                     b -> runCommand("cutter")).bounds(x, y, BTN_W, ROW_H).build());
+            y += ROW_H + GAP;
+        }
+        if (SkillsData.rank("builder_anvil") > 0) {
+            addRenderableWidget(Button.builder(Component.literal("Карманная наковальня (/anvil)"),
+                    b -> runCommand("anvil")).bounds(x, y, BTN_W, ROW_H).build());
         }
     }
 
