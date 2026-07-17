@@ -53,11 +53,16 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Market.TYPE, Payloads.Market.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Buildings.TYPE, Payloads.Buildings.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.CityMap.TYPE, Payloads.CityMap.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.Events.TYPE, Payloads.Events.CODEC);
         // Профессии (dominoskills:*) — отдельный плагин на сервере, свой протокол.
         PayloadTypeRegistry.serverboundPlay().register(SkillsPayloads.Action.TYPE, SkillsPayloads.Action.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.State.TYPE, SkillsPayloads.State.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Xp.TYPE, SkillsPayloads.Xp.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Result.TYPE, SkillsPayloads.Result.CODEC);
+        // Вход/регистрация (dominoauth:*) — отдельный плагин, свой протокол, GUI поверх K-меню.
+        PayloadTypeRegistry.serverboundPlay().register(AuthPayloads.Action.TYPE, AuthPayloads.Action.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(AuthPayloads.State.TYPE, AuthPayloads.State.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(AuthPayloads.Result.TYPE, AuthPayloads.Result.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -80,12 +85,18 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onBuildings(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(Payloads.CityMap.TYPE, (payload, context) ->
                 context.client().execute(() -> CityData.onCityMap(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(Payloads.Events.TYPE, (payload, context) ->
+                context.client().execute(() -> CityData.onEvents(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.State.TYPE, (payload, context) ->
                 context.client().execute(() -> SkillsData.onState(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.Xp.TYPE, (payload, context) ->
                 context.client().execute(() -> SkillsData.onXp(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.Result.TYPE, (payload, context) ->
                 context.client().execute(() -> SkillsData.onResult(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(AuthPayloads.State.TYPE, (payload, context) ->
+                context.client().execute(() -> AuthData.onState(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(AuthPayloads.Result.TYPE, (payload, context) ->
+                context.client().execute(() -> AuthData.onResult(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -192,12 +203,29 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             CityActions.requestState();
             SkillsActions.requestState();
+            AuthActions.requestState();
             if (client.getCurrentServer() != null) lastServer = client.getCurrentServer();
         });
+        // Новый сервер может быть без DominoAuth вовсе — не тащим за собой чужое needsAuth.
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> AuthData.reset());
 
-        // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть залогиниться через
-        // DominoAuth), пока игрок не нажал «Больше не показывать». Если в момент срабатывания
-        // открыт другой экран (чат, инвентарь) — ждём, пока экрана не будет.
+        // Вход/регистрация форсированы, пока needsAuth: ловим И попытку открыть любой другой
+        // экран (AFTER_INIT — без единого кадра мигания), И Esc→null (тиковый страж ниже).
+        ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
+            if (AuthData.stateReceived && AuthData.needsAuth && !(screen instanceof AuthScreen)) {
+                client.setScreen(new AuthScreen());
+            }
+        });
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player != null && AuthData.stateReceived && AuthData.needsAuth
+                    && !(client.screen instanceof AuthScreen)) {
+                client.setScreen(new AuthScreen());
+            }
+        });
+
+        // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть пройти вход/регистрацию,
+        // AuthScreen выше держит client.screen занятым, пока needsAuth), пока игрок не нажал
+        // «Больше не показывать». Если в момент срабатывания открыт другой экран — ждём.
         int[] guideDelay = {-1};
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             if (!GuideScreen.dismissed()) guideDelay[0] = 200;

@@ -52,6 +52,9 @@ public final class CityData {
     public record MarkerInfo(int id, String name, String world, int x, int z, long createdAt) {}
     /** Постройка из витрины города — метка на карте мира (наведение: название + фото). */
     public record MapBuildingInfo(String name, String cityName, String world, int x, int z, String photoId) {}
+    /** Ивент, созданный игроком — вкладка «Ивенты» в K-меню. */
+    public record EventInfo(int id, String title, String description, String creatorName, String creatorCity,
+                             String world, int x, int y, int z, long createdAt, boolean canDelete) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -109,6 +112,9 @@ public final class CityData {
     public static final List<TeammateInfo> mapTeammates = new ArrayList<>();
     public static final List<MarkerInfo> mapMarkers = new ArrayList<>();
     public static final List<MapBuildingInfo> mapBuildings = new ArrayList<>();
+
+    // Ивенты (вкладка «Ивенты» K-меню).
+    public static final List<EventInfo> events = new ArrayList<>();
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -395,6 +401,29 @@ public final class CityData {
                 int bx = in.readInt(), bz = in.readInt();
                 String photoId = in.readUTF();
                 mapBuildings.add(new MapBuildingInfo(bName, bCity, bWorld, bx, bz, photoId));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onEvents(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
+            events.clear();
+            int n = in.readInt();
+            for (int i = 0; i < n; i++) {
+                int id = in.readInt();
+                String title = in.readUTF();
+                String description = in.readUTF();
+                String creatorName = in.readUTF();
+                String creatorCity = in.readUTF();
+                String world = in.readUTF();
+                int x = in.readInt(), y = in.readInt(), z = in.readInt();
+                long createdAt = in.readLong();
+                boolean canDelete = in.readBoolean();
+                events.add(new EventInfo(id, title, description, creatorName, creatorCity,
+                        world, x, y, z, createdAt, canDelete));
             }
         } catch (Exception ignored) { }
         refresh();

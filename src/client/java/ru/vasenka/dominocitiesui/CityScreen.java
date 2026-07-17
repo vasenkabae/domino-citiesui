@@ -29,10 +29,10 @@ import java.util.Map;
 public class CityScreen extends Screen {
 
     private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3,
-            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6;
-    private static final int MODE_COUNT = 7;
+            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6, MODE_EVENTS = 7;
+    private static final int MODE_COUNT = 8;
     private static final String[] TAB_LABELS =
-            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок"};
+            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок", "Ивенты"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
@@ -109,6 +109,16 @@ public class CityScreen extends Screen {
     private String pendingMarketPrice = "";
     private String pendingMarketQuantity = "1";
 
+    // ── Ивенты ──
+    private static final int EVENT_FORM_TOP_MARGIN = 12;
+    private static final int EVENT_ROW_H2 = 20; // высота полей формы (название/описание/кнопка)
+    private static final int EVENT_GAP = 6;
+    private static final int EVENT_ROW_H = 40; // высота карточки ивента в списке
+    private EditBox eventTitleInput;
+    private EditBox eventDescInput;
+    private String pendingEventTitle = "";
+    private String pendingEventDesc = "";
+
     // ── Постройки/рейтинг/комментарии (карточка города внутри «Все города») ──
     private static final int CARD_INFO_TOP = 28;        // строка описания
     private static final int CARD_TOOLBAR_TOP = 40;      // рейтинг + подвкладки
@@ -157,6 +167,8 @@ public class CityScreen extends Screen {
         if (mayorDescInput != null) pendingMayorDesc = mayorDescInput.getValue();
         if (lawInput != null) pendingLaw = lawInput.getValue();
         if (cityNameInput != null) pendingCityName = cityNameInput.getValue();
+        if (eventTitleInput != null) pendingEventTitle = eventTitleInput.getValue();
+        if (eventDescInput != null) pendingEventDesc = eventDescInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -172,7 +184,7 @@ public class CityScreen extends Screen {
                 || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
                 || isFocused(buildingNameInput) || isFocused(buildingDescInput)
                 || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)
-                || isFocused(cityNameInput)) return true;
+                || isFocused(cityNameInput) || isFocused(eventTitleInput) || isFocused(eventDescInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -205,6 +217,8 @@ public class CityScreen extends Screen {
             initBounties(top);
         } else if (mode == MODE_MARKET) {
             initMarket(top);
+        } else if (mode == MODE_EVENTS) {
+            initEvents(top);
         } else if (!CityData.hasCity) {
             initNoCity(top);
         } else if (mode == MODE_ECONOMY) {
@@ -245,6 +259,7 @@ public class CityScreen extends Screen {
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
         if (mode == MODE_BOUNTIES) CityActions.requestBounties();
         if (mode == MODE_MARKET) CityActions.requestMarket();
+        if (mode == MODE_EVENTS) CityActions.requestEvents();
         rebuildWidgets();
     }
 
@@ -753,6 +768,99 @@ public class CityScreen extends Screen {
         return top + MARKET_FORM_TOP_MARGIN + MARKET_ROW_H + MARKET_GAP + MARKET_ROW_H + MARKET_GAP;
     }
 
+    /**
+     * Ивенты: любой игрок создаёт название/описание, координаты берёт сервер (текущая позиция
+     * игрока) — клиент их не присылает и не показывает поле ввода для них.
+     */
+    private void initEvents(int top) {
+        int y = top + EVENT_FORM_TOP_MARGIN;
+        eventTitleInput = new EditBox(this.font, left(), y, right() - left(), EVENT_ROW_H2,
+                Component.literal("Название"));
+        eventTitleInput.setMaxLength(32);
+        eventTitleInput.setHint(Component.literal("Название ивента (до 32)"));
+        eventTitleInput.setValue(pendingEventTitle);
+        addRenderableWidget(eventTitleInput);
+        y += EVENT_ROW_H2 + EVENT_GAP;
+
+        eventDescInput = new EditBox(this.font, left(), y, right() - left(), EVENT_ROW_H2,
+                Component.literal("Описание"));
+        eventDescInput.setMaxLength(200);
+        eventDescInput.setHint(Component.literal("Описание (необязательно, до 200)"));
+        eventDescInput.setValue(pendingEventDesc);
+        addRenderableWidget(eventDescInput);
+        y += EVENT_ROW_H2 + EVENT_GAP;
+
+        addRenderableWidget(Button.builder(Component.literal("Создать ивент здесь, где стою"),
+                b -> {
+                    String title = eventTitleInput.getValue().trim();
+                    if (!title.isEmpty()) CityActions.createEvent(title, eventDescInput.getValue().trim());
+                })
+                .bounds(left(), y, right() - left(), EVENT_ROW_H2).build());
+
+        addRenderableWidget(Button.builder(Component.literal("Обновить"),
+                b -> CityActions.requestEvents())
+                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+
+        int ly = eventsListTop(top);
+        int shown = Math.min(6, CityData.events.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.EventInfo e = CityData.events.get(i);
+            if (e.canDelete()) {
+                addRenderableWidget(Button.builder(Component.literal("Удалить"),
+                        b -> CityActions.deleteEvent(e.id()))
+                        .bounds(right() - 60, ly + 3, 60, 16).build());
+            }
+            ly += EVENT_ROW_H;
+        }
+    }
+
+    private int eventsListTop(int top) {
+        return top + EVENT_FORM_TOP_MARGIN + (EVENT_ROW_H2 + EVENT_GAP) * 3;
+    }
+
+    private void bgEvents(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        int y = eventsListTop(top);
+        int shown = Math.min(6, CityData.events.size());
+        for (int i = 0; i < shown; i++) {
+            boolean hover = mouseX >= left() - 6 && mouseX < right() + 6
+                    && mouseY >= y && mouseY < y + EVENT_ROW_H - 4;
+            g.fill(left() - 6, y, right() + 6, y + EVENT_ROW_H - 4, hover ? ROW_HOVER : CARD);
+            g.fill(left() - 6, y, left() - 4, y + EVENT_ROW_H - 4, GOLD);
+            y += EVENT_ROW_H;
+        }
+    }
+
+    private void renderEvents(GuiGraphicsExtractor g, int top) {
+        g.text(this.font, "СОЗДАТЬ ИВЕНТ — координаты берутся там, где ты сейчас стоишь", left(), top, DIM);
+
+        int y = eventsListTop(top);
+        if (CityData.events.isEmpty()) {
+            g.text(this.font, "Ивентов пока нет — стань первым", left(), y + 4, DIM);
+            return;
+        }
+        int shown = Math.min(6, CityData.events.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.EventInfo e = CityData.events.get(i);
+            int maxW = right() - left() - (e.canDelete() ? 68 : 8);
+
+            clipText(g, e.title(), left() + 4, y + 3, maxW, GOLD_BRIGHT);
+
+            String desc = e.description().isEmpty() ? "без описания" : e.description();
+            clipText(g, desc, left() + 4, y + 15, maxW, e.description().isEmpty() ? DIM : WHITE);
+
+            String coords = e.world() + " " + e.x() + "/" + e.y() + "/" + e.z();
+            int coordsW = this.font.width(coords);
+            String who = "от " + e.creatorName() + (e.creatorCity().isEmpty() ? "" : " (" + e.creatorCity() + ")");
+            clipText(g, who, left() + 4, y + 27, maxW - coordsW - 6, GRAY);
+            rightText(g, coords, left() + 4 + maxW, y + 27, BLUE);
+
+            y += EVENT_ROW_H;
+        }
+        if (CityData.events.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.events.size() - shown) + " ивентов", left() + 4, y + 2, DIM);
+        }
+    }
+
 
     // ── Универсальный поиск-пикер ресурса ──────────────────────────────────
 
@@ -974,6 +1082,8 @@ public class CityScreen extends Screen {
             bgBounties(g, top, mouseX, mouseY);
         } else if (mode == MODE_MARKET) {
             bgMarket(g, top);
+        } else if (mode == MODE_EVENTS) {
+            bgEvents(g, top, mouseX, mouseY);
         } else if (!CityData.hasCity) {
             bgNoCity(g, top);
         } else if (mode == MODE_ECONOMY) {
@@ -1203,6 +1313,8 @@ public class CityScreen extends Screen {
             renderBounties(g, top);
         } else if (mode == MODE_MARKET) {
             renderMarket(g, top, mouseX, mouseY);
+        } else if (mode == MODE_EVENTS) {
+            renderEvents(g, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, "У тебя пока нет города", cx(), top + 14, WHITE);
             g.centeredText(this.font, "Оснуй свой — прямо там, где стоишь", cx(), top + 28, GRAY);
