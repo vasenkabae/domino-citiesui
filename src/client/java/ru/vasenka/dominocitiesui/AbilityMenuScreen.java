@@ -62,36 +62,27 @@ public class AbilityMenuScreen extends Screen {
                         && SkillsData.lastAbilityProf == i && SkillsData.lastAbilityTier == tier;
                 final int prof = i;
                 final int t = tier;
-                addRenderableWidget(Button.builder(
-                        Component.literal((eq ? "✔ " : "") + n.name()),
-                        b -> { SkillsData.equippedLightHand = false; SkillsData.lastAbilityProf = prof;
-                               SkillsData.lastAbilityTier = t; onClose(); })
-                        .bounds(x, y, BTN_W, ROW_H).build());
+                addRenderableWidget(FancyButton.of(Component.literal((eq ? "✔ " : "") + n.name()), x, y, BTN_W, ROW_H, () -> { SkillsData.equippedLightHand = false; SkillsData.lastAbilityProf = prof;
+                               SkillsData.lastAbilityTier = t; onClose(); }));
                 y += ROW_H + GAP;
             }
         }
         if (SkillsData.hasLightHand()) {
             boolean eq = SkillsData.equippedLightHand;
             String state = SkillsData.lightHandOn ? "ВКЛ" : "ВЫКЛ";
-            addRenderableWidget(Button.builder(
-                    Component.literal((eq ? "✔ " : "") + "Лёгкая рука [" + state + "]"),
-                    b -> { SkillsData.equippedLightHand = true; onClose(); })
-                    .bounds(x, y, BTN_W, ROW_H).build());
+            addRenderableWidget(FancyButton.of(Component.literal((eq ? "✔ " : "") + "Лёгкая рука [" + state + "]"), x, y, BTN_W, ROW_H, () -> { SkillsData.equippedLightHand = true; onClose(); }));
             y += ROW_H + GAP;
         }
         if (SkillsData.rank("builder_wb") > 0) {
-            addRenderableWidget(Button.builder(Component.literal("Верстак в кармане (/wb)"),
-                    b -> runCommand("wb")).bounds(x, y, BTN_W, ROW_H).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Верстак в кармане (/wb)"), x, y, BTN_W, ROW_H, () -> runCommand("wb")));
             y += ROW_H + GAP;
         }
         if (SkillsData.rank("builder_cutter") > 0) {
-            addRenderableWidget(Button.builder(Component.literal("Карманный камнерез (/cutter)"),
-                    b -> runCommand("cutter")).bounds(x, y, BTN_W, ROW_H).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Карманный камнерез (/cutter)"), x, y, BTN_W, ROW_H, () -> runCommand("cutter")));
             y += ROW_H + GAP;
         }
         if (SkillsData.rank("builder_anvil") > 0) {
-            addRenderableWidget(Button.builder(Component.literal("Карманная наковальня (/anvil)"),
-                    b -> runCommand("anvil")).bounds(x, y, BTN_W, ROW_H).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Карманная наковальня (/anvil)"), x, y, BTN_W, ROW_H, () -> runCommand("anvil")));
         }
     }
 

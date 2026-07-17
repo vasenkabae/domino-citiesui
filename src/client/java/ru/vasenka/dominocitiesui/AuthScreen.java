@@ -97,9 +97,7 @@ public class AuthScreen extends Screen {
         toggleY = y - 12;
         y += 4;
 
-        addRenderableWidget(Button.builder(
-                Component.literal(registering ? "Зарегистрироваться" : "Войти"),
-                b -> submit()).bounds(x, y, fieldW, FIELD_H).build());
+        addRenderableWidget(FancyButton.of(Component.literal(registering ? "Зарегистрироваться" : "Войти"), x, y, fieldW, FIELD_H, () -> submit()));
     }
 
     private void submit() {

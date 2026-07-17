@@ -45,6 +45,7 @@ public final class CityActions {
     public static void requestDirectory()   { send(Protocol.A_REQUEST_DIRECTORY); }
     public static void requestResources()   { send(Protocol.A_REQUEST_RESOURCES); }
     public static void buildRoad()          { send(Protocol.A_BUILD_ROAD); }
+    public static void roadToCity(String cityName) { send(Protocol.A_ROAD_TO_CITY, cityName); }
     public static void requestContracts()   { send(Protocol.A_REQUEST_CONTRACTS); }
     public static void requestBounties()    { send(Protocol.A_REQUEST_BOUNTIES); }
     public static void requestMarket()      { send(Protocol.A_REQUEST_MARKET); }

@@ -99,26 +99,25 @@ public class WorldMapScreen extends Screen {
 
         // Переключатель Верхний/Нижний мир (правый верх панели).
         String worldLabel = viewNether ? "Мир: Нижний" : "Мир: Верхний";
-        addRenderableWidget(Button.builder(Component.literal(worldLabel), b -> {
+        addRenderableWidget(FancyButton.of(Component.literal(worldLabel), this.width - PANEL_MARGIN - 158, PANEL_MARGIN + 6, 150, 20, () -> {
             viewNether = !viewNether;
             userPickedWorld = true;   // игрок сам выбрал — авто-выбор по измерению больше не навязываем
             viewInitialized = false;  // пересчитать центр под новый мир
             cancelPendingMarkerState();
             rebuildWidgets();
-        }).bounds(this.width - PANEL_MARGIN - 158, PANEL_MARGIN + 6, 150, 20).build());
+        }));
 
         String label = CityData.mapInProgress ? "Идёт пересчёт…"
                 : CityData.mapCooldownSeconds > 0 ? "Обновить карту (" + CityData.mapCooldownSeconds + "с)"
                 : "Обновить карту";
-        addRenderableWidget(Button.builder(Component.literal(label), b -> CityActions.refreshMap())
-                .bounds(this.width / 2 - 165, this.height - 32, 150, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal(label), this.width / 2 - 165, this.height - 32, 150, 20, () -> CityActions.refreshMap()));
 
         if (activeHasImage()) {
             String markLabel = placingMarker ? "Кликни по карте (Esc — отмена)" : "Поставить метку";
-            addRenderableWidget(Button.builder(Component.literal(markLabel), b -> {
+            addRenderableWidget(FancyButton.of(Component.literal(markLabel), this.width / 2 + 15, this.height - 32, placingMarker ? 230 : 150, 20, () -> {
                 placingMarker = !placingMarker;
                 rebuildWidgets();
-            }).bounds(this.width / 2 + 15, this.height - 32, placingMarker ? 230 : 150, 20).build());
+            }));
         }
     }
 
@@ -138,16 +137,15 @@ public class WorldMapScreen extends Screen {
         markerNameInput.setHint(Component.literal("Название метки (до 32)"));
         markerNameInput.setValue(pendingMarkerName);
         addRenderableWidget(markerNameInput);
-        addRenderableWidget(Button.builder(Component.literal("Поставить"), b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Поставить"), this.width / 2 + 46, this.height - 32, 80, 20, () -> {
             String name = markerNameInput.getValue().trim();
             if (!name.isEmpty()) {
                 CityActions.addMarker(activeWorld(),
                         (int) Math.round(pendingMarkerWorldX), (int) Math.round(pendingMarkerWorldZ), name);
                 cancelPendingMarker();
             }
-        }).bounds(this.width / 2 + 46, this.height - 32, 80, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Отмена"), b -> cancelPendingMarker())
-                .bounds(this.width / 2 + 132, this.height - 32, 70, 20).build());
+        }));
+        addRenderableWidget(FancyButton.of(Component.literal("Отмена"), this.width / 2 + 132, this.height - 32, 70, 20, () -> cancelPendingMarker()));
     }
 
     private void cancelPendingMarker() {

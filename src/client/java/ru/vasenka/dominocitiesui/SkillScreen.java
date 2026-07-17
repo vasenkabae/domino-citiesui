@@ -48,7 +48,7 @@ public class SkillScreen extends Screen {
     private static final int NODE_W = 140;
 
     private int tab = 0; // profId выбранной вкладки
-    private Button resetBtn;
+    private FancyButton resetBtn;
     private long confirmUntil;
 
     public SkillScreen() {
@@ -108,8 +108,7 @@ public class SkillScreen extends Screen {
 
     @Override
     protected void init() {
-        resetBtn = addRenderableWidget(Button.builder(Component.literal(resetLabel()),
-                b -> onResetClick()).bounds(left(), py2() - 26, 180, 20).build());
+        resetBtn = addRenderableWidget(FancyButton.of(Component.literal(resetLabel()), left(), py2() - 26, 180, 20, () -> onResetClick()));
     }
 
     private String resetLabel() {

@@ -149,7 +149,7 @@ public class GuideScreen extends Screen {
     };
 
     private int page = 0;
-    private Button prevBtn, nextBtn;
+    private FancyButton prevBtn, nextBtn;
 
     public GuideScreen() {
         super(Component.literal("Памятка Domino Craft"));
@@ -189,17 +189,11 @@ public class GuideScreen extends Screen {
 
     @Override
     protected void init() {
-        prevBtn = addRenderableWidget(Button.builder(Component.literal("◀ Назад"),
-                b -> turn(-1)).bounds(left(), py2() - 52, 90, 20).build());
-        nextBtn = addRenderableWidget(Button.builder(Component.literal("Далее ▶"),
-                b -> turn(1)).bounds(right() - 90, py2() - 52, 90, 20).build());
+        prevBtn = addRenderableWidget(FancyButton.of(Component.literal("◀ Назад"), left(), py2() - 52, 90, 20, () -> turn(-1)));
+        nextBtn = addRenderableWidget(FancyButton.of(Component.literal("Далее ▶"), right() - 90, py2() - 52, 90, 20, () -> turn(1)));
 
-        addRenderableWidget(Button.builder(Component.literal("Больше не показывать"),
-                b -> { dismissForever(); onClose(); })
-                .bounds(left(), py2() - 26, 150, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("Закрыть"),
-                b -> onClose())
-                .bounds(right() - 90, py2() - 26, 90, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Больше не показывать"), left(), py2() - 26, 150, 20, () -> { dismissForever(); onClose(); }));
+        addRenderableWidget(FancyButton.of(Component.literal("Закрыть"), right() - 90, py2() - 26, 90, 20, () -> onClose()));
         updateNav();
     }
 

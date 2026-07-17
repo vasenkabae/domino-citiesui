@@ -204,9 +204,7 @@ public class CityScreen extends Screen {
         int top = CONTENT_TOP;
 
         // Памятка сервера — маленький «?» над правым верхним углом панели.
-        addRenderableWidget(Button.builder(Component.literal("?"),
-                b -> net.minecraft.client.Minecraft.getInstance().setScreen(new GuideScreen()))
-                .bounds(px2() - 18, 6, 18, 16).build());
+        addRenderableWidget(FancyButton.of(Component.literal("?"), px2() - 18, 6, 18, 16, () -> net.minecraft.client.Minecraft.getInstance().setScreen(new GuideScreen())));
 
         if (CityData.protocolMismatch) {
             return; // предупреждение рисуется в render()
@@ -277,9 +275,7 @@ public class CityScreen extends Screen {
         input.setValue(pendingText);
         addRenderableWidget(input);
 
-        addRenderableWidget(Button.builder(Component.literal("Основать город"),
-                b -> { CityActions.create(input.getValue()); })
-                .bounds(cx() - 100, top + 72, 200, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Основать город"), cx() - 100, top + 72, 200, 20, () -> { CityActions.create(input.getValue()); }));
     }
 
     private void initCity(int top) {
@@ -291,18 +287,12 @@ public class CityScreen extends Screen {
             CityData.Member m = CityData.members.get(i);
             boolean canKick = !m.isMayor() && (CityData.isMayor || (CityData.isOfficer && !m.isOfficer()));
             if (canKick) {
-                addRenderableWidget(Button.builder(Component.literal("Кик"),
-                        b -> CityActions.kick(m.uuid()))
-                        .bounds(right() - 176, y - 2, 40, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Кик"), right() - 176, y - 2, 40, 16, () -> CityActions.kick(m.uuid())));
             }
             if (CityData.isMayor && !m.isMayor()) {
                 String promoteLabel = m.isOfficer() ? "Понизить" : "Повысить";
-                addRenderableWidget(Button.builder(Component.literal(promoteLabel),
-                        b -> { if (m.isOfficer()) CityActions.demote(m.uuid()); else CityActions.promote(m.uuid()); })
-                        .bounds(right() - 132, y - 2, 64, 16).build());
-                addRenderableWidget(Button.builder(Component.literal("Передать"),
-                        b -> CityActions.transfer(m.uuid()))
-                        .bounds(right() - 64, y - 2, 64, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal(promoteLabel), right() - 132, y - 2, 64, 16, () -> { if (m.isOfficer()) CityActions.demote(m.uuid()); else CityActions.promote(m.uuid()); }));
+                addRenderableWidget(FancyButton.of(Component.literal("Передать"), right() - 64, y - 2, 64, 16, () -> CityActions.transfer(m.uuid())));
             }
             y += 18;
         }
@@ -316,28 +306,17 @@ public class CityScreen extends Screen {
             input.setHint(Component.literal("Ник игрока"));
             input.setValue(pendingText);
             addRenderableWidget(input);
-            addRenderableWidget(Button.builder(Component.literal("Пригласить"),
-                    b -> { CityActions.invite(input.getValue()); })
-                    .bounds(left() + 176, by, 96, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Пригласить"), left() + 176, by, 96, 20, () -> { CityActions.invite(input.getValue()); }));
             by += 26;
         }
 
-        addRenderableWidget(Button.builder(Component.literal("Показать границу"),
-                b -> CityActions.toggleBorder())
-                .bounds(left(), by, 142, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Показать границу"), left(), by, 142, 20, () -> CityActions.toggleBorder()));
 
         if (CityData.isMayor) {
-            addRenderableWidget(Button.builder(Component.literal("Распустить город"),
-                    b -> CityActions.disband())
-                    .bounds(left() + 146, by, 142, 20).build());
-            addRenderableWidget(Button.builder(
-                    Component.literal(CityData.open ? "Сделать закрытым" : "Сделать открытым"),
-                    b -> CityActions.toggleOpen())
-                    .bounds(left() + 292, by, 142, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Распустить город"), left() + 146, by, 142, 20, () -> CityActions.disband()));
+            addRenderableWidget(FancyButton.of(Component.literal(CityData.open ? "Сделать закрытым" : "Сделать открытым"), left() + 292, by, 142, 20, () -> CityActions.toggleOpen()));
         } else {
-            addRenderableWidget(Button.builder(Component.literal("Покинуть город"),
-                    b -> CityActions.leave())
-                    .bounds(left() + 146, by, 142, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Покинуть город"), left() + 146, by, 142, 20, () -> CityActions.leave()));
         }
         by += 26;
 
@@ -348,15 +327,9 @@ public class CityScreen extends Screen {
             titleInput.setHint(Component.literal("Новое название роли"));
             titleInput.setValue(pendingTitleText);
             addRenderableWidget(titleInput);
-            addRenderableWidget(Button.builder(Component.literal(CityData.mayorTitle),
-                    b -> CityActions.setTitle((byte) 2, titleInput.getValue()))
-                    .bounds(left() + 146, by, 94, 20).build());
-            addRenderableWidget(Button.builder(Component.literal(CityData.officerTitle),
-                    b -> CityActions.setTitle((byte) 1, titleInput.getValue()))
-                    .bounds(left() + 244, by, 94, 20).build());
-            addRenderableWidget(Button.builder(Component.literal(CityData.memberTitle),
-                    b -> CityActions.setTitle((byte) 0, titleInput.getValue()))
-                    .bounds(left() + 342, by, 94, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal(CityData.mayorTitle), left() + 146, by, 94, 20, () -> CityActions.setTitle((byte) 2, titleInput.getValue())));
+            addRenderableWidget(FancyButton.of(Component.literal(CityData.officerTitle), left() + 244, by, 94, 20, () -> CityActions.setTitle((byte) 1, titleInput.getValue())));
+            addRenderableWidget(FancyButton.of(Component.literal(CityData.memberTitle), left() + 342, by, 94, 20, () -> CityActions.setTitle((byte) 0, titleInput.getValue())));
             by += 26;
 
             // Переименование самого города — только мэр.
@@ -367,9 +340,7 @@ public class CityScreen extends Screen {
             cityNameInput.setHint(Component.literal("Новое название города (3–20)"));
             cityNameInput.setValue(pendingCityName);
             addRenderableWidget(cityNameInput);
-            addRenderableWidget(Button.builder(Component.literal("Переименовать"),
-                    b -> CityActions.renameCity(cityNameInput.getValue()))
-                    .bounds(right() - 90, by, 90, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Переименовать"), right() - 90, by, 90, 20, () -> CityActions.renameCity(cityNameInput.getValue())));
             by += 26;
 
             if (!mayorDescSeeded) { pendingMayorDesc = CityData.description; mayorDescSeeded = true; }
@@ -379,9 +350,7 @@ public class CityScreen extends Screen {
             mayorDescInput.setHint(Component.literal("Описание города (до 200, видно всем)"));
             mayorDescInput.setValue(pendingMayorDesc);
             addRenderableWidget(mayorDescInput);
-            addRenderableWidget(Button.builder(Component.literal("Сохранить"),
-                    b -> CityActions.setCityDescription(mayorDescInput.getValue()))
-                    .bounds(right() - 90, by, 90, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Сохранить"), right() - 90, by, 90, 20, () -> CityActions.setCityDescription(mayorDescInput.getValue())));
             by += 26;
 
             // Платное расширение границы города по чанкам (за алмазы).
@@ -389,8 +358,7 @@ public class CityScreen extends Screen {
             String exLabel = atMax
                     ? "Граница: максимум (+" + CityData.expandMax + " блоков)"
                     : "Расширить границу +" + CityData.expandStep + " (" + CityData.expandCost + " алм.)";
-            Button exBtn = Button.builder(Component.literal(exLabel), b -> CityActions.expandCity())
-                    .bounds(left(), by, right() - left(), 20).build();
+            FancyButton exBtn = FancyButton.of(Component.literal(exLabel), left(), by, right() - left(), 20, () -> CityActions.expandCity());
             exBtn.active = !atMax;
             addRenderableWidget(exBtn);
         }
@@ -403,41 +371,36 @@ public class CityScreen extends Screen {
         for (Catalogs.Buff b : Catalogs.BUFFS) {
             boolean bought = CityData.buffs.contains(b.id());
             if (!bought && CityData.isMayor && CityData.points >= b.cost()) {
-                addRenderableWidget(Button.builder(Component.literal("Купить"),
-                        btn -> CityActions.buyBuff(b.id()))
-                        .bounds(right() - 76, y - 2, 76, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Купить"), right() - 76, y - 2, 76, 16, () -> CityActions.buyBuff(b.id())));
             }
             y += 18;
         }
 
         // Ресурсы в сундуках — жёстко привязано ко дну экрана (список выше кнопки,
         // кнопка выше строки результата на height-60), не зависит от переменной высоты блока выше.
-        addRenderableWidget(Button.builder(Component.literal("Показать сундуки"),
-                b -> CityActions.requestResources())
-                .bounds(cx() - 75, this.height - 90, 150, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Показать сундуки"), cx() - 75, this.height - 90, 150, 20, () -> CityActions.requestResources()));
 
         if (CityData.isMayor || CityData.isOfficer) {
-            addRenderableWidget(Button.builder(Component.literal("Проложить дорогу (земля)"),
-                    b -> CityActions.buildRoad())
-                    .bounds(cx() - 90, this.height - 115, 180, 20).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Проложить дорогу (земля)"), cx() - 90, this.height - 115, 180, 20, () -> CityActions.buildRoad()));
         }
     }
 
     private void initDirectory(int top) {
         if (selectedCity != null) { initCityCard(top); return; }
 
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestDirectory())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestDirectory()));
 
         int y = top;
         int shown = Math.min(6, CityData.directory.size());
+        boolean canRoad = CityData.isMayor || CityData.isOfficer;
         for (int i = 0; i < shown; i++) {
             CityData.CityInfo c = CityData.directory.get(i);
             if (c.open() && !c.name().equals(CityData.cityName)) {
-                addRenderableWidget(Button.builder(Component.literal("Вступить"),
-                        b -> CityActions.join(c.name()))
-                        .bounds(right() - 70, y - 1, 66, 18).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Вступить"), right() - 70, y - 1, 66, 18, () -> CityActions.join(c.name())));
+            }
+            // Дорога между городами: от ядра своего города до этого (мэр/офицер, за землю)
+            if (canRoad && !c.name().equals(CityData.cityName)) {
+                addRenderableWidget(FancyButton.of(Component.literal("Дорога"), right() - 140, y - 1, 62, 18, () -> CityActions.roadToCity(c.name())));
             }
             y += 28;
         }
@@ -445,12 +408,12 @@ public class CityScreen extends Screen {
 
     /** Карточка выбранного города: рейтинг/комментарии + список построек / детали / форма сохранения. */
     private void initCityCard(int top) {
-        addRenderableWidget(Button.builder(Component.literal("← Назад"), b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("← Назад"), left(), top - 4, 70, 18, () -> {
             if (buildingFormOpen) buildingFormOpen = false;
             else if (selectedBuildingId != -1) selectedBuildingId = -1;
             else selectedCity = null;
             rebuildWidgets();
-        }).bounds(left(), top - 4, 70, 18).build());
+        }));
 
         if (buildingFormOpen) { initBuildingForm(top); return; }
 
@@ -459,9 +422,7 @@ public class CityScreen extends Screen {
         if (selectedBuildingId != -1) {
             CityData.BuildingInfo b = findSelectedBuilding();
             if (b != null && b.canDelete()) {
-                addRenderableWidget(Button.builder(Component.literal("Удалить"),
-                        btn -> { CityActions.deleteBuilding(selectedCity, selectedBuildingId); selectedBuildingId = -1; })
-                        .bounds(right() - 70, top - 4, 70, 18).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Удалить"), right() - 70, top - 4, 70, 18, () -> { CityActions.deleteBuilding(selectedCity, selectedBuildingId); selectedBuildingId = -1; }));
             }
             return;
         }
@@ -470,42 +431,30 @@ public class CityScreen extends Screen {
         if (dataReady && CityData.cardCanRate) {
             boolean liked = CityData.cardMyVote == 1;
             boolean disliked = CityData.cardMyVote == 2;
-            addRenderableWidget(Button.builder(Component.literal(liked ? "✔ нравится" : "Нравится"),
-                    b -> CityActions.rateCity(selectedCity, liked ? (byte) 0 : (byte) 1))
-                    .bounds(left(), top + CARD_TOOLBAR_TOP, 88, 16).build());
-            addRenderableWidget(Button.builder(Component.literal(disliked ? "✔ не нравится" : "Не нравится"),
-                    b -> CityActions.rateCity(selectedCity, disliked ? (byte) 0 : (byte) 2))
-                    .bounds(left() + 92, top + CARD_TOOLBAR_TOP, 100, 16).build());
+            addRenderableWidget(FancyButton.of(Component.literal(liked ? "✔ нравится" : "Нравится"), left(), top + CARD_TOOLBAR_TOP, 88, 16, () -> CityActions.rateCity(selectedCity, liked ? (byte) 0 : (byte) 1)));
+            addRenderableWidget(FancyButton.of(Component.literal(disliked ? "✔ не нравится" : "Не нравится"), left() + 92, top + CARD_TOOLBAR_TOP, 100, 16, () -> CityActions.rateCity(selectedCity, disliked ? (byte) 0 : (byte) 2)));
         }
 
         // Подвкладки внутри карточки.
-        addRenderableWidget(Button.builder(Component.literal("Постройки"),
-                b -> { cardSubMode = CARD_SUB_BUILDINGS; rebuildWidgets(); })
-                .bounds(right() - 262, top + CARD_TOOLBAR_TOP, 80, 16).build());
-        addRenderableWidget(Button.builder(Component.literal("Комментарии"),
-                b -> { cardSubMode = CARD_SUB_COMMENTS; rebuildWidgets(); })
-                .bounds(right() - 178, top + CARD_TOOLBAR_TOP, 84, 16).build());
-        addRenderableWidget(Button.builder(Component.literal("Законы"),
-                b -> { cardSubMode = CARD_SUB_LAWS; rebuildWidgets(); })
-                .bounds(right() - 90, top + CARD_TOOLBAR_TOP, 90, 16).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Постройки"), right() - 262, top + CARD_TOOLBAR_TOP, 80, 16, () -> { cardSubMode = CARD_SUB_BUILDINGS; rebuildWidgets(); }));
+        addRenderableWidget(FancyButton.of(Component.literal("Комментарии"), right() - 178, top + CARD_TOOLBAR_TOP, 84, 16, () -> { cardSubMode = CARD_SUB_COMMENTS; rebuildWidgets(); }));
+        addRenderableWidget(FancyButton.of(Component.literal("Законы"), right() - 90, top + CARD_TOOLBAR_TOP, 90, 16, () -> { cardSubMode = CARD_SUB_LAWS; rebuildWidgets(); }));
 
         if (cardSubMode == CARD_SUB_COMMENTS) { initComments(top); return; }
         if (cardSubMode == CARD_SUB_LAWS) { initLaws(top); return; }
 
         // Список построек: жителю своего города доступны рулетка и сохранение.
         if (selectedCity.equals(CityData.cityName)) {
-            addRenderableWidget(Button.builder(Component.literal("Получить рулетку"), b -> {
+            addRenderableWidget(FancyButton.of(Component.literal("Получить рулетку"), left(), this.height - 40, 130, 20, () -> {
                 CityActions.requestBuildingWand();
                 net.minecraft.client.Minecraft.getInstance().setScreen(null);
-            }).bounds(left(), this.height - 40, 130, 20).build());
-            addRenderableWidget(Button.builder(Component.literal("Сохранить постройку"), b -> {
+            }));
+            addRenderableWidget(FancyButton.of(Component.literal("Сохранить постройку"), left() + 134, this.height - 40, 140, 20, () -> {
                 buildingFormOpen = true;
                 rebuildWidgets();
-            }).bounds(left() + 134, this.height - 40, 140, 20).build());
+            }));
         }
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestBuildings(selectedCity))
-                .bounds(right() - 90, this.height - 40, 90, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), right() - 90, this.height - 40, 90, 20, () -> CityActions.requestBuildings(selectedCity)));
     }
 
     private void initComments(int top) {
@@ -516,14 +465,14 @@ public class CityScreen extends Screen {
             commentInput.setHint(Component.literal("Комментарий (до 200)"));
             commentInput.setValue(pendingComment);
             addRenderableWidget(commentInput);
-            addRenderableWidget(Button.builder(Component.literal("Отправить"), b -> {
+            addRenderableWidget(FancyButton.of(Component.literal("Отправить"), right() - 84, y, 84, 20, () -> {
                 String text = commentInput.getValue().trim();
                 if (!text.isEmpty()) {
                     CityActions.addComment(selectedCity, text);
                     pendingComment = "";
                     commentInput.setValue("");
                 }
-            }).bounds(right() - 84, y, 84, 20).build());
+            }));
             y += 26;
         }
 
@@ -532,9 +481,7 @@ public class CityScreen extends Screen {
         for (int i = 0; i < shown; i++) {
             CityData.CommentInfo c = CityData.cardComments.get(i);
             if (c.canDelete()) {
-                addRenderableWidget(Button.builder(Component.literal("Удалить"),
-                        b -> CityActions.deleteComment(selectedCity, c.id()))
-                        .bounds(right() - 60, listY + 2, 60, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Удалить"), right() - 60, listY + 2, 60, 16, () -> CityActions.deleteComment(selectedCity, c.id())));
             }
             listY += COMMENT_ROW_H;
         }
@@ -549,14 +496,14 @@ public class CityScreen extends Screen {
             lawInput.setHint(Component.literal("Новый закон (до 100)"));
             lawInput.setValue(pendingLaw);
             addRenderableWidget(lawInput);
-            addRenderableWidget(Button.builder(Component.literal("Вписать"), b -> {
+            addRenderableWidget(FancyButton.of(Component.literal("Вписать"), right() - 84, y, 84, 20, () -> {
                 String text = lawInput.getValue().trim();
                 if (!text.isEmpty()) {
                     CityActions.addLaw(text);
                     pendingLaw = "";
                     lawInput.setValue("");
                 }
-            }).bounds(right() - 84, y, 84, 20).build());
+            }));
             y += 26;
         }
 
@@ -565,9 +512,7 @@ public class CityScreen extends Screen {
         for (int i = 0; i < shown; i++) {
             CityData.LawInfo l = CityData.cardLaws.get(i);
             if (canEdit) {
-                addRenderableWidget(Button.builder(Component.literal("Убрать"),
-                        b -> CityActions.deleteLaw(l.id()))
-                        .bounds(right() - 56, listY + 1, 56, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Убрать"), right() - 56, listY + 1, 56, 16, () -> CityActions.deleteLaw(l.id())));
             }
             listY += LAW_ROW_H;
         }
@@ -590,22 +535,22 @@ public class CityScreen extends Screen {
         addRenderableWidget(buildingDescInput);
         y += 34;
 
-        addRenderableWidget(Button.builder(Component.literal("Сделать фото (3 сек) и сохранить"), b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Сделать фото (3 сек) и сохранить"), left(), y, right() - left(), 20, () -> {
             String name = buildingNameInput.getValue().trim();
             if (name.isEmpty()) return;
             BuildingPhotoTaker.start(name, buildingDescInput.getValue().trim());
             closeBuildingForm();
             net.minecraft.client.Minecraft.getInstance().setScreen(null);
-        }).bounds(left(), y, right() - left(), 20).build());
+        }));
         y += 24;
 
-        addRenderableWidget(Button.builder(Component.literal("Сохранить без фото"), b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Сохранить без фото"), left(), y, right() - left(), 20, () -> {
             String name = buildingNameInput.getValue().trim();
             if (name.isEmpty()) return;
             CityActions.saveBuilding(name, buildingDescInput.getValue().trim(), "");
             closeBuildingForm();
             rebuildWidgets();
-        }).bounds(left(), y, right() - left(), 20).build());
+        }));
     }
 
     private void closeBuildingForm() {
@@ -625,9 +570,7 @@ public class CityScreen extends Screen {
     }
 
     private void initTop(int top) {
-        addRenderableWidget(Button.builder(Component.literal("Обновить топ"),
-                b -> CityActions.requestTop())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить топ"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestTop()));
     }
 
     /** Заказ контракта — только у кого есть город; выполнить чужой контракт можно и без города. */
@@ -637,8 +580,7 @@ public class CityScreen extends Screen {
             y = initResourcePicker(y, "contractReq");
             y = initResourcePicker(y, "contractRew");
 
-            addRenderableWidget(Button.builder(Component.literal("Заказать контракт"),
-                    b -> {
+            addRenderableWidget(FancyButton.of(Component.literal("Заказать контракт"), left(), y, right() - left(), PICKER_BUTTON_H, () -> {
                         int reqAmt = pickerAmountValue("contractReq");
                         int rewAmt = pickerAmountValue("contractRew");
                         String reqMat = pickerMaterial.get("contractReq");
@@ -646,21 +588,16 @@ public class CityScreen extends Screen {
                         if (reqAmt > 0 && rewAmt > 0 && reqMat != null && rewMat != null) {
                             CityActions.createContract(reqMat, reqAmt, rewMat, rewAmt);
                         }
-                    })
-                    .bounds(left(), y, right() - left(), PICKER_BUTTON_H).build());
+                    }));
         }
 
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestContracts())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestContracts()));
 
         int y = contractsListTop(top);
         int shown = Math.min(6, CityData.contracts.size());
         for (int i = 0; i < shown; i++) {
             CityData.ContractInfo c = CityData.contracts.get(i);
-            addRenderableWidget(Button.builder(Component.literal("Взять"),
-                    b -> CityActions.takeContract(c.id()))
-                    .bounds(right() - 55, y, 55, 18).build());
+            addRenderableWidget(FancyButton.of(Component.literal("Взять"), right() - 55, y, 55, 18, () -> CityActions.takeContract(c.id())));
             y += 20;
         }
     }
@@ -685,29 +622,23 @@ public class CityScreen extends Screen {
         int pickerY = nickY + BOUNTY_NICK_ROW_H;
         int afterPicker = initResourcePicker(pickerY, "bountyReward");
 
-        addRenderableWidget(Button.builder(Component.literal("Заказать розыск"),
-                b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Заказать розыск"), left(), afterPicker, right() - left(), PICKER_BUTTON_H, () -> {
                     String nick = bountyNickInput.getValue().trim();
                     int amount = pickerAmountValue("bountyReward");
                     String material = pickerMaterial.get("bountyReward");
                     if (!nick.isEmpty() && amount > 0 && material != null) {
                         CityActions.createBounty(nick, material, amount);
                     }
-                })
-                .bounds(left(), afterPicker, right() - left(), PICKER_BUTTON_H).build());
+                }));
 
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestBounties())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestBounties()));
 
         int y = bountyListTop(top);
         int shown = Math.min(6, CityData.bounties.size());
         for (int i = 0; i < shown; i++) {
             CityData.BountyInfo b = CityData.bounties.get(i);
             if (!b.claimed()) {
-                addRenderableWidget(Button.builder(Component.literal("Взять"),
-                        btn -> CityActions.takeBounty(b.id()))
-                        .bounds(right() - 55, y, 55, 18).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Взять"), right() - 55, y, 55, 18, () -> CityActions.takeBounty(b.id())));
             }
             y += 20;
         }
@@ -740,30 +671,22 @@ public class CityScreen extends Screen {
         addRenderableWidget(marketQuantityInput);
 
         int buttonY = priceY + MARKET_ROW_H + MARKET_GAP;
-        addRenderableWidget(Button.builder(Component.literal("Выставить (предмет из руки)"),
-                b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Выставить (предмет из руки)"), left(), buttonY, right() - left(), MARKET_ROW_H, () -> {
                     String price = marketPriceInput.getValue().trim();
                     int qty = parseAmount(marketQuantityInput.getValue());
                     if (!price.isEmpty() && qty > 0) CityActions.listItem(price, qty);
-                })
-                .bounds(left(), buttonY, right() - left(), MARKET_ROW_H).build());
+                }));
 
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestMarket())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestMarket()));
 
         int y = marketListTop(top);
         int shown = Math.min(6, CityData.market.size());
         for (int i = 0; i < shown; i++) {
             CityData.MarketListingInfo l = CityData.market.get(i);
             if (l.mine()) {
-                addRenderableWidget(Button.builder(Component.literal("Снять"),
-                        b -> CityActions.marketCancel(l.id()))
-                        .bounds(right() - 70, y, 70, 18).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Снять"), right() - 70, y, 70, 18, () -> CityActions.marketCancel(l.id())));
             } else {
-                addRenderableWidget(Button.builder(Component.literal("Купить"),
-                        b -> CityActions.marketInterest(l.id()))
-                        .bounds(right() - 55, y, 55, 18).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Купить"), right() - 55, y, 55, 18, () -> CityActions.marketInterest(l.id())));
             }
             y += 20;
         }
@@ -805,32 +728,24 @@ public class CityScreen extends Screen {
         addRenderableWidget(eventDateInput);
         y += EVENT_ROW_H2 + EVENT_GAP;
 
-        addRenderableWidget(Button.builder(Component.literal("Создать ивент здесь, где стою"),
-                b -> {
+        addRenderableWidget(FancyButton.of(Component.literal("Создать ивент здесь, где стою"), left(), y, right() - left(), EVENT_ROW_H2, () -> {
                     String title = eventTitleInput.getValue().trim();
                     String dateTime = eventDateInput.getValue().trim();
                     if (!title.isEmpty() && !dateTime.isEmpty()) {
                         CityActions.createEvent(title, eventDescInput.getValue().trim(), dateTime);
                     }
-                })
-                .bounds(left(), y, right() - left(), EVENT_ROW_H2).build());
+                }));
 
-        addRenderableWidget(Button.builder(Component.literal("Обновить"),
-                b -> CityActions.requestEvents())
-                .bounds(cx() - 60, this.height - 40, 120, 20).build());
+        addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestEvents()));
 
         int ly = eventsListTop(top);
         int shown = Math.min(6, CityData.events.size());
         for (int i = 0; i < shown; i++) {
             CityData.EventInfo e = CityData.events.get(i);
             String partLabel = (e.participating() ? "✔ " : "") + "Участвую (" + e.participants() + ")";
-            addRenderableWidget(Button.builder(Component.literal(partLabel),
-                    b -> CityActions.toggleEventParticipate(e.id()))
-                    .bounds(right() - EVENT_BTN_W, ly + 3, EVENT_BTN_W, 18).build());
+            addRenderableWidget(FancyButton.of(Component.literal(partLabel), right() - EVENT_BTN_W, ly + 3, EVENT_BTN_W, 18, () -> CityActions.toggleEventParticipate(e.id())));
             if (e.canDelete()) {
-                addRenderableWidget(Button.builder(Component.literal("Удалить"),
-                        b -> CityActions.deleteEvent(e.id()))
-                        .bounds(right() - EVENT_BTN_W, ly + 25, EVENT_BTN_W, 16).build());
+                addRenderableWidget(FancyButton.of(Component.literal("Удалить"), right() - EVENT_BTN_W, ly + 25, EVENT_BTN_W, 16, () -> CityActions.deleteEvent(e.id())));
             }
             ly += EVENT_ROW_H;
         }
