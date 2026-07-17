@@ -40,6 +40,8 @@ public class WorldMapScreen extends Screen {
     private static final int TEAMMATE_DOT = 0xFF6FB0E0;
     private static final int MARKER_COLOR = 0xFFE0B040;
     private static final int BUILDING_COLOR = 0xFFE07B4A;
+    private static final int DOT_BORDER = 0xFF15161A;
+    private static final int SELF_DOT = 0xFFFFFFFF;
 
     private static final int PANEL_MARGIN = 20;
     private static final int CONTENT_TOP = 44;
@@ -267,7 +269,8 @@ public class WorldMapScreen extends Screen {
         for (CityData.TeammateInfo t : CityData.mapTeammates) {
             if (!t.world().equals(CityData.mapWorld)) continue;
             int sx = (int) worldToScreenX(t.x()), sy = (int) worldToScreenZ(t.z());
-            g.fill(sx - 2, sy - 2, sx + 2, sy + 2, TEAMMATE_DOT);
+            g.fill(sx - 3, sy - 3, sx + 4, sy + 4, DOT_BORDER);
+            g.fill(sx - 2, sy - 2, sx + 3, sy + 3, TEAMMATE_DOT);
         }
 
         for (CityData.MarkerInfo m : CityData.mapMarkers) {
@@ -289,7 +292,8 @@ public class WorldMapScreen extends Screen {
         var player = Minecraft.getInstance().player;
         if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
             int sx = (int) worldToScreenX(player.getX()), sz = (int) worldToScreenZ(player.getZ());
-            g.fill(sx - 2, sz - 2, sx + 2, sz + 2, 0xFFFFFFFF);
+            g.fill(sx - 3, sz - 3, sx + 4, sz + 4, DOT_BORDER);
+            g.fill(sx - 2, sz - 2, sx + 3, sz + 3, SELF_DOT);
         }
 
         g.disableScissor();
@@ -313,7 +317,7 @@ public class WorldMapScreen extends Screen {
         }
         g.text(this.font, "серое — там ещё никто не бывал  ·  колесо — зум, ЛКМ+тяни — двигать карту",
                 px1() + 12, boxY1() - 22, DIM);
-        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  домик — постройка (наведи курсор)  ·  ПКМ по метке — удалить",
+        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  домик — постройка, точка — игрок (наведи курсор)  ·  ПКМ по метке — удалить",
                 px1() + 12, boxY1() - 10, DIM);
 
         for (CityData.MapCityInfo c : CityData.mapCities) {
@@ -330,6 +334,23 @@ public class WorldMapScreen extends Screen {
             if (!inBox(sx, sy)) continue;
             if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 8) {
                 g.text(this.font, m.name(), sx + 6, sy - 8, GOLD_BRIGHT);
+            }
+        }
+
+        for (CityData.TeammateInfo t : CityData.mapTeammates) {
+            if (!t.world().equals(CityData.mapWorld)) continue;
+            int sx = (int) worldToScreenX(t.x()), sy = (int) worldToScreenZ(t.z());
+            if (!inBox(sx, sy)) continue;
+            if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 6) {
+                g.text(this.font, t.name(), sx + 6, sy - 8, WHITE);
+            }
+        }
+
+        var self = Minecraft.getInstance().player;
+        if (self != null && worldMatches(self.level().dimension(), CityData.mapWorld)) {
+            int sx = (int) worldToScreenX(self.getX()), sy = (int) worldToScreenZ(self.getZ());
+            if (inBox(sx, sy) && Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 6) {
+                g.text(this.font, Minecraft.getInstance().getUser().getName(), sx + 6, sy - 8, GOLD_BRIGHT);
             }
         }
 
