@@ -53,8 +53,9 @@ public final class CityData {
     /** Постройка из витрины города — метка на карте мира (наведение: название + фото). */
     public record MapBuildingInfo(String name, String cityName, String world, int x, int z, String photoId) {}
     /** Ивент, созданный игроком — вкладка «Ивенты» в K-меню. */
-    public record EventInfo(int id, String title, String description, String creatorName, String creatorCity,
-                             String world, int x, int y, int z, long createdAt, boolean canDelete) {}
+    public record EventInfo(int id, String title, String description, String dateTime,
+                             String creatorName, String creatorCity, String world, int x, int y, int z,
+                             long createdAt, boolean canDelete, int participants, boolean participating) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -416,14 +417,17 @@ public final class CityData {
                 int id = in.readInt();
                 String title = in.readUTF();
                 String description = in.readUTF();
+                String dateTime = in.readUTF();
                 String creatorName = in.readUTF();
                 String creatorCity = in.readUTF();
                 String world = in.readUTF();
                 int x = in.readInt(), y = in.readInt(), z = in.readInt();
                 long createdAt = in.readLong();
                 boolean canDelete = in.readBoolean();
-                events.add(new EventInfo(id, title, description, creatorName, creatorCity,
-                        world, x, y, z, createdAt, canDelete));
+                int participants = in.readInt();
+                boolean participating = in.readBoolean();
+                events.add(new EventInfo(id, title, description, dateTime, creatorName, creatorCity,
+                        world, x, y, z, createdAt, canDelete, participants, participating));
             }
         } catch (Exception ignored) { }
         refresh();

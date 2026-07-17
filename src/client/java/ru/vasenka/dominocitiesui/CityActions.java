@@ -245,8 +245,8 @@ public final class CityActions {
     public static void requestEvents() { send(Protocol.A_REQUEST_EVENTS); }
 
     /** Координаты берёт сервер (текущая позиция игрока) — клиент их не присылает. */
-    public static void createEvent(String title, String description) {
-        send(Protocol.A_CREATE_EVENT, title, description);
+    public static void createEvent(String title, String description, String dateTime) {
+        send(Protocol.A_CREATE_EVENT, title, description, dateTime);
     }
 
     public static void deleteEvent(int eventId) {
@@ -254,6 +254,18 @@ public final class CityActions {
         try (DataOutputStream out = new DataOutputStream(bos)) {
             out.writeInt(Protocol.VERSION);
             out.writeByte(Protocol.A_DELETE_EVENT);
+            out.writeInt(eventId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
+    }
+
+    public static void toggleEventParticipate(int eventId) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bos)) {
+            out.writeInt(Protocol.VERSION);
+            out.writeByte(Protocol.A_TOGGLE_EVENT_PARTICIPATE);
             out.writeInt(eventId);
         } catch (IOException e) {
             throw new RuntimeException(e);

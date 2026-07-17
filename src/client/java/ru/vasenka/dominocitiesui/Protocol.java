@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 14;
+    public static final int VERSION = 15;
 
     public static final String NS = "dominocities";
     public static final String CH_ACTION    = "action";
@@ -70,4 +70,5 @@ public final class Protocol {
     public static final byte A_REQUEST_EVENTS = 46;
     public static final byte A_CREATE_EVENT   = 47;
     public static final byte A_DELETE_EVENT   = 48;
+    public static final byte A_TOGGLE_EVENT_PARTICIPATE = 49;
 }

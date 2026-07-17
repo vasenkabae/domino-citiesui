@@ -111,13 +111,16 @@ public class CityScreen extends Screen {
 
     // ── Ивенты ──
     private static final int EVENT_FORM_TOP_MARGIN = 12;
-    private static final int EVENT_ROW_H2 = 20; // высота полей формы (название/описание/кнопка)
+    private static final int EVENT_ROW_H2 = 20; // высота полей формы (название/описание/дата/кнопка)
     private static final int EVENT_GAP = 6;
-    private static final int EVENT_ROW_H = 40; // высота карточки ивента в списке
+    private static final int EVENT_ROW_H = 54; // высота карточки ивента в списке (4 строки текста)
+    private static final int EVENT_BTN_W = 64; // ширина колонки кнопок «Участвую»/«Удалить»
     private EditBox eventTitleInput;
     private EditBox eventDescInput;
+    private EditBox eventDateInput;
     private String pendingEventTitle = "";
     private String pendingEventDesc = "";
+    private String pendingEventDate = "";
 
     // ── Постройки/рейтинг/комментарии (карточка города внутри «Все города») ──
     private static final int CARD_INFO_TOP = 28;        // строка описания
@@ -169,6 +172,7 @@ public class CityScreen extends Screen {
         if (cityNameInput != null) pendingCityName = cityNameInput.getValue();
         if (eventTitleInput != null) pendingEventTitle = eventTitleInput.getValue();
         if (eventDescInput != null) pendingEventDesc = eventDescInput.getValue();
+        if (eventDateInput != null) pendingEventDate = eventDateInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -184,7 +188,8 @@ public class CityScreen extends Screen {
                 || isFocused(marketPriceInput) || isFocused(marketQuantityInput)
                 || isFocused(buildingNameInput) || isFocused(buildingDescInput)
                 || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)
-                || isFocused(cityNameInput) || isFocused(eventTitleInput) || isFocused(eventDescInput)) return true;
+                || isFocused(cityNameInput) || isFocused(eventTitleInput) || isFocused(eventDescInput)
+                || isFocused(eventDateInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -769,8 +774,10 @@ public class CityScreen extends Screen {
     }
 
     /**
-     * Ивенты: любой игрок создаёт название/описание, координаты берёт сервер (текущая позиция
-     * игрока) — клиент их не присылает и не показывает поле ввода для них.
+     * Ивенты: любой игрок создаёт название/описание/дату-время, координаты берёт сервер
+     * (текущая позиция игрока) — клиент их не присылает и не показывает поле ввода для них.
+     * У каждого ивента в списке — кнопка «Участвую» (переключаемая, с числом участников) и,
+     * для автора/опа, «Удалить», обе в правой колонке карточки, друг под другом.
      */
     private void initEvents(int top) {
         int y = top + EVENT_FORM_TOP_MARGIN;
@@ -790,10 +797,21 @@ public class CityScreen extends Screen {
         addRenderableWidget(eventDescInput);
         y += EVENT_ROW_H2 + EVENT_GAP;
 
+        eventDateInput = new EditBox(this.font, left(), y, right() - left(), EVENT_ROW_H2,
+                Component.literal("Дата и время"));
+        eventDateInput.setMaxLength(40);
+        eventDateInput.setHint(Component.literal("Дата и время, например «18 июля, 20:00»"));
+        eventDateInput.setValue(pendingEventDate);
+        addRenderableWidget(eventDateInput);
+        y += EVENT_ROW_H2 + EVENT_GAP;
+
         addRenderableWidget(Button.builder(Component.literal("Создать ивент здесь, где стою"),
                 b -> {
                     String title = eventTitleInput.getValue().trim();
-                    if (!title.isEmpty()) CityActions.createEvent(title, eventDescInput.getValue().trim());
+                    String dateTime = eventDateInput.getValue().trim();
+                    if (!title.isEmpty() && !dateTime.isEmpty()) {
+                        CityActions.createEvent(title, eventDescInput.getValue().trim(), dateTime);
+                    }
                 })
                 .bounds(left(), y, right() - left(), EVENT_ROW_H2).build());
 
@@ -805,17 +823,21 @@ public class CityScreen extends Screen {
         int shown = Math.min(6, CityData.events.size());
         for (int i = 0; i < shown; i++) {
             CityData.EventInfo e = CityData.events.get(i);
+            String partLabel = (e.participating() ? "✔ " : "") + "Участвую (" + e.participants() + ")";
+            addRenderableWidget(Button.builder(Component.literal(partLabel),
+                    b -> CityActions.toggleEventParticipate(e.id()))
+                    .bounds(right() - EVENT_BTN_W, ly + 3, EVENT_BTN_W, 18).build());
             if (e.canDelete()) {
                 addRenderableWidget(Button.builder(Component.literal("Удалить"),
                         b -> CityActions.deleteEvent(e.id()))
-                        .bounds(right() - 60, ly + 3, 60, 16).build());
+                        .bounds(right() - EVENT_BTN_W, ly + 25, EVENT_BTN_W, 16).build());
             }
             ly += EVENT_ROW_H;
         }
     }
 
     private int eventsListTop(int top) {
-        return top + EVENT_FORM_TOP_MARGIN + (EVENT_ROW_H2 + EVENT_GAP) * 3;
+        return top + EVENT_FORM_TOP_MARGIN + (EVENT_ROW_H2 + EVENT_GAP) * 4;
     }
 
     private void bgEvents(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
@@ -839,9 +861,9 @@ public class CityScreen extends Screen {
             return;
         }
         int shown = Math.min(6, CityData.events.size());
+        int maxW = right() - left() - EVENT_BTN_W - 8;
         for (int i = 0; i < shown; i++) {
             CityData.EventInfo e = CityData.events.get(i);
-            int maxW = right() - left() - (e.canDelete() ? 68 : 8);
 
             clipText(g, e.title(), left() + 4, y + 3, maxW, GOLD_BRIGHT);
 
@@ -853,6 +875,9 @@ public class CityScreen extends Screen {
             String who = "от " + e.creatorName() + (e.creatorCity().isEmpty() ? "" : " (" + e.creatorCity() + ")");
             clipText(g, who, left() + 4, y + 27, maxW - coordsW - 6, GRAY);
             rightText(g, coords, left() + 4 + maxW, y + 27, BLUE);
+
+            int nx = seg(g, left() + 4, y + 39, "Когда: ", DIM);
+            clipText(g, e.dateTime(), nx, y + 39, maxW - (nx - left() - 4), GOLD_BRIGHT);
 
             y += EVENT_ROW_H;
         }
