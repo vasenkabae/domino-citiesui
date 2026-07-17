@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 15;
+    public static final int VERSION = 16;
 
     public static final String NS = "dominocities";
     public static final String CH_ACTION    = "action";

@@ -17,6 +17,10 @@ import net.minecraft.world.level.Level;
  * Схематичный (не текстурный) плоский снимок с сервера + зум/пан колесом и перетаскиванием,
  * границы и названия городов, точки живых жителей своего города, личные метки (клик по карте).
  *
+ * Две карты на одном экране — Верхний и Нижний мир, переключатель справа сверху; при открытии
+ * автоматически выбирается тот мир, где игрок сейчас. На карте Нижнего мира города верхнего мира
+ * рисуются по нозер-координатам (÷8) — как маппятся порталы, ориентир куда вести портал.
+ *
  * Зум/пан реализован через матрицу (pushMatrix/translate/scale) + enableScissor, а НЕ через
  * доп. параметры blit — так не зависим от неоднозначной семантики multi-int оверлоада blit
  * в этом форке: текстура всегда рисуется «как есть» (0,0 → полный размер), всё позиционирование
@@ -48,6 +52,10 @@ public class WorldMapScreen extends Screen {
     private static final int BOTTOM_MARGIN = 40;
     private static final double MIN_ZOOM = 1.0, MAX_ZOOM = 8.0;
     private static final double MARKER_CLICK_RADIUS = 6.0;
+    private static final int NETHER_SCALE = 8; // 1 блок незера = 8 блоков верхнего мира
+
+    // ── Какой мир показываем (Верхний/Нижний). Переживает rebuildWidgets, авто-выбор при открытии. ──
+    private boolean viewNether = false;
 
     // ── Вид (зум/пан) — переживает rebuildWidgets(), сбрасывается только при новом открытии ──
     private boolean viewInitialized = false;
@@ -64,9 +72,40 @@ public class WorldMapScreen extends Screen {
         super(Component.literal("Карта мира"));
     }
 
+    // ── Активная карта (Верхний/Нижний) — все геттеры смотрят на viewNether ──────
+
+    private boolean activeHasImage() { return viewNether ? CityData.netherMapHasImage : CityData.mapHasImage; }
+    private long activeVersion()     { return viewNether ? CityData.netherMapVersion : CityData.mapVersion; }
+    private String activeTexFile()   { return viewNether ? CityMapTexture.NETHER : CityMapTexture.OVERWORLD; }
+    private int activeMinX()         { return viewNether ? CityData.netherMapMinX : CityData.mapMinX; }
+    private int activeMinZ()         { return viewNether ? CityData.netherMapMinZ : CityData.mapMinZ; }
+    private int activeBlockSize()    { return viewNether ? CityData.netherMapBlockSize : CityData.mapBlockSize; }
+    private int activeWidth()        { return viewNether ? CityData.netherMapWidth : CityData.mapWidth; }
+    private int activeHeight()       { return viewNether ? CityData.netherMapHeight : CityData.mapHeight; }
+    private String activeWorld()     { return viewNether ? CityData.netherMapWorld : CityData.mapWorld; }
+
+    /** Город в мире незера (реальные координаты) или проецируется с верхнего мира (÷8)? */
+    private boolean cityIsNative(CityData.MapCityInfo c) {
+        return c.world().equals(CityData.netherMapWorld);
+    }
+    /** Виден ли город на активной карте (на карте незера — все города, верхнемировые проецируются ÷8). */
+    private boolean cityVisible(CityData.MapCityInfo c) {
+        return viewNether || c.world().equals(CityData.mapWorld);
+    }
+
     @Override
     protected void init() {
         if (pendingMarkerWorldX != null) { initMarkerForm(); return; }
+
+        // Переключатель Верхний/Нижний мир (правый верх панели).
+        String worldLabel = viewNether ? "Мир: Нижний" : "Мир: Верхний";
+        addRenderableWidget(Button.builder(Component.literal(worldLabel), b -> {
+            viewNether = !viewNether;
+            userPickedWorld = true;   // игрок сам выбрал — авто-выбор по измерению больше не навязываем
+            viewInitialized = false;  // пересчитать центр под новый мир
+            cancelPendingMarkerState();
+            rebuildWidgets();
+        }).bounds(this.width - PANEL_MARGIN - 158, PANEL_MARGIN + 6, 150, 20).build());
 
         String label = CityData.mapInProgress ? "Идёт пересчёт…"
                 : CityData.mapCooldownSeconds > 0 ? "Обновить карту (" + CityData.mapCooldownSeconds + "с)"
@@ -74,13 +113,22 @@ public class WorldMapScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal(label), b -> CityActions.refreshMap())
                 .bounds(this.width / 2 - 165, this.height - 32, 150, 20).build());
 
-        if (CityData.mapHasImage) {
+        if (activeHasImage()) {
             String markLabel = placingMarker ? "Кликни по карте (Esc — отмена)" : "Поставить метку";
             addRenderableWidget(Button.builder(Component.literal(markLabel), b -> {
                 placingMarker = !placingMarker;
                 rebuildWidgets();
             }).bounds(this.width / 2 + 15, this.height - 32, placingMarker ? 230 : 150, 20).build());
         }
+    }
+
+    /** Сбрасывает состояние размещения метки без rebuildWidgets (вызывается из обработчиков, что сами перестроят). */
+    private void cancelPendingMarkerState() {
+        placingMarker = false;
+        pendingMarkerWorldX = null;
+        pendingMarkerWorldZ = null;
+        pendingMarkerName = "";
+        markerNameInput = null;
     }
 
     private void initMarkerForm() {
@@ -93,7 +141,7 @@ public class WorldMapScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Поставить"), b -> {
             String name = markerNameInput.getValue().trim();
             if (!name.isEmpty()) {
-                CityActions.addMarker(CityData.mapWorld,
+                CityActions.addMarker(activeWorld(),
                         (int) Math.round(pendingMarkerWorldX), (int) Math.round(pendingMarkerWorldZ), name);
                 cancelPendingMarker();
             }
@@ -137,9 +185,9 @@ public class WorldMapScreen extends Screen {
 
     /** Пикселей экрана на 1 блок мира при текущем зуме (0, если карты ещё нет). */
     private double pxPerBlock() {
-        if (!CityData.mapHasImage) return 0;
-        double worldSpanX = Math.max(1, CityData.mapWidth * (double) CityData.mapBlockSize);
-        double worldSpanZ = Math.max(1, CityData.mapHeight * (double) CityData.mapBlockSize);
+        if (!activeHasImage()) return 0;
+        double worldSpanX = Math.max(1, activeWidth() * (double) activeBlockSize());
+        double worldSpanZ = Math.max(1, activeHeight() * (double) activeBlockSize());
         double boxW = boxX2() - boxX1(), boxH = boxY2() - boxY1();
         double fit = Math.min(boxW / worldSpanX, boxH / worldSpanZ);
         return fit * zoomFactor;
@@ -151,34 +199,52 @@ public class WorldMapScreen extends Screen {
     private double screenToWorldZ(double sy) { return viewCenterZ + (sy - boxCenterY()) / pxPerBlock(); }
 
     private void ensureViewInitialized() {
-        if (viewInitialized || !CityData.mapHasImage) return;
+        // (a) Авто-выбор мира по текущему измерению игрока — пока он сам не переключал и пока
+        // не залатчили. В незере ждём, пока придёт карта незера (netherMapHasImage), потом фиксируем.
+        if (!userPickedWorld && !autoWorldDone) {
+            var pl = Minecraft.getInstance().player;
+            if (pl != null && pl.level().dimension().equals(Level.NETHER) && CityData.netherMapHasImage) {
+                if (!viewNether) { viewNether = true; viewInitialized = false; }
+                autoWorldDone = true;
+            } else if (pl != null && pl.level().dimension().equals(Level.OVERWORLD) && CityData.mapHasImage) {
+                autoWorldDone = true; // остаёмся на верхнем мире
+            }
+        }
+
+        // (b) Центрирование вида — один раз на выбранный мир.
+        if (viewInitialized || !activeHasImage()) return;
         viewInitialized = true;
         var player = Minecraft.getInstance().player;
-        if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
+        if (player != null && worldMatches(player.level().dimension(), activeWorld())) {
             viewCenterX = player.getX();
             viewCenterZ = player.getZ();
         } else {
-            viewCenterX = CityData.mapMinX + CityData.mapWidth * CityData.mapBlockSize / 2.0;
-            viewCenterZ = CityData.mapMinZ + CityData.mapHeight * CityData.mapBlockSize / 2.0;
+            viewCenterX = activeMinX() + activeWidth() * activeBlockSize() / 2.0;
+            viewCenterZ = activeMinZ() + activeHeight() * activeBlockSize() / 2.0;
         }
         clampView();
     }
 
+    /** Игрок хоть раз сам жал переключатель — тогда авто-выбор по измерению больше не навязываем. */
+    private boolean userPickedWorld = false;
+    /** Авто-выбор мира уже отработал (залатчен) — не дёргаем его на каждый кадр. */
+    private boolean autoWorldDone = false;
+
     private void clampView() {
         zoomFactor = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomFactor));
-        if (!CityData.mapHasImage) return;
-        double spanX = CityData.mapWidth * (double) CityData.mapBlockSize;
-        double spanZ = CityData.mapHeight * (double) CityData.mapBlockSize;
-        viewCenterX = Math.max(CityData.mapMinX, Math.min(CityData.mapMinX + spanX, viewCenterX));
-        viewCenterZ = Math.max(CityData.mapMinZ, Math.min(CityData.mapMinZ + spanZ, viewCenterZ));
+        if (!activeHasImage()) return;
+        double spanX = activeWidth() * (double) activeBlockSize();
+        double spanZ = activeHeight() * (double) activeBlockSize();
+        viewCenterX = Math.max(activeMinX(), Math.min(activeMinX() + spanX, viewCenterX));
+        viewCenterZ = Math.max(activeMinZ(), Math.min(activeMinZ() + spanZ, viewCenterZ));
     }
 
-    /** Ближайшая своя метка под курсором (в пределах MARKER_CLICK_RADIUS px) или null. */
+    /** Ближайшая своя метка активного мира под курсором (в пределах MARKER_CLICK_RADIUS px) или null. */
     private CityData.MarkerInfo findMarkerNear(double sx, double sy) {
         CityData.MarkerInfo best = null;
         double bestDist = MARKER_CLICK_RADIUS;
         for (CityData.MarkerInfo m : CityData.mapMarkers) {
-            if (!m.world().equals(CityData.mapWorld)) continue;
+            if (!m.world().equals(activeWorld())) continue;
             double dx = worldToScreenX(m.x()) - sx, dz = worldToScreenZ(m.z()) - sy;
             double dist = Math.sqrt(dx * dx + dz * dz);
             if (dist < bestDist) { bestDist = dist; best = m; }
@@ -191,7 +257,7 @@ public class WorldMapScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) return true;
-        if (!CityData.mapHasImage || !inBox(mouseX, mouseY) || scrollY == 0) return false;
+        if (!activeHasImage() || !inBox(mouseX, mouseY) || scrollY == 0) return false;
         zoomFactor *= Math.pow(1.2, scrollY);
         clampView();
         return true;
@@ -200,7 +266,7 @@ public class WorldMapScreen extends Screen {
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
         if (super.mouseDragged(event, dragX, dragY)) return true;
-        if (!CityData.mapHasImage || event.button() != 0 || !inBox(event.x(), event.y())) return false;
+        if (!activeHasImage() || event.button() != 0 || !inBox(event.x(), event.y())) return false;
         double ppb = pxPerBlock();
         if (ppb <= 0) return false;
         viewCenterX -= dragX / ppb;
@@ -212,7 +278,7 @@ public class WorldMapScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (super.mouseClicked(event, doubleClick)) return true;
-        if (!CityData.mapHasImage || !inBox(event.x(), event.y())) return false;
+        if (!activeHasImage() || !inBox(event.x(), event.y())) return false;
         if (event.button() == 1) {
             CityData.MarkerInfo hit = findMarkerNear(event.x(), event.y());
             if (hit != null) { CityActions.deleteMarker(hit.id()); return true; }
@@ -239,50 +305,53 @@ public class WorldMapScreen extends Screen {
         g.outline(px1(), py1(), px2() - px1(), py2() - py1(), PANEL_EDGE);
         g.horizontalLine(px1() + 1, px2() - 2, boxY1() - 10, GOLD_LINE);
         g.fill(boxX1() - 1, boxY1() - 1, boxX2() + 1, boxY2() + 1, CARD);
-        if (!CityData.mapHasImage) return;
+        if (!activeHasImage()) return;
 
         g.enableScissor(boxX1(), boxY1(), boxX2(), boxY2());
 
         double ppb = pxPerBlock();
-        Identifier tex = CityMapTexture.get(CityData.mapVersion);
+        Identifier tex = CityMapTexture.get(activeVersion(), activeTexFile());
         if (tex != null && ppb > 0) {
-            double scale = CityData.mapBlockSize * ppb;
-            double originX = worldToScreenX(CityData.mapMinX);
-            double originY = worldToScreenZ(CityData.mapMinZ);
+            double scale = activeBlockSize() * ppb;
+            double originX = worldToScreenX(activeMinX());
+            double originY = worldToScreenZ(activeMinZ());
+            int tw = CityMapTexture.width(activeTexFile());
+            int th = CityMapTexture.height(activeTexFile());
             var pose = g.pose();
             pose.pushMatrix();
             pose.translate((float) originX, (float) originY);
             pose.scale((float) scale, (float) scale);
-            g.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0f, 0f,
-                    CityMapTexture.width(), CityMapTexture.height(),
-                    CityMapTexture.width(), CityMapTexture.height());
+            g.blit(RenderPipelines.GUI_TEXTURED, tex, 0, 0, 0f, 0f, tw, th, tw, th);
             pose.popMatrix();
         }
 
         for (CityData.MapCityInfo c : CityData.mapCities) {
-            if (!c.world().equals(CityData.mapWorld)) continue;
-            int x1 = (int) worldToScreenX(c.x() - c.radius()), z1 = (int) worldToScreenZ(c.z() - c.radius());
-            int x2 = (int) worldToScreenX(c.x() + c.radius()), z2 = (int) worldToScreenZ(c.z() + c.radius());
+            if (!cityVisible(c)) continue;
+            int div = (viewNether && !cityIsNative(c)) ? NETHER_SCALE : 1;
+            double cx = c.x() / (double) div, cz = c.z() / (double) div;
+            double cr = c.radius() / (double) div;
+            int x1 = (int) worldToScreenX(cx - cr), z1 = (int) worldToScreenZ(cz - cr);
+            int x2 = (int) worldToScreenX(cx + cr), z2 = (int) worldToScreenZ(cz + cr);
             g.outline(x1, z1, Math.max(1, x2 - x1), Math.max(1, z2 - z1), c.mine() ? MAP_MINE_LINE : MAP_OTHER_LINE);
         }
 
         for (CityData.TeammateInfo t : CityData.mapTeammates) {
-            if (!t.world().equals(CityData.mapWorld)) continue;
+            if (!t.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(t.x()), sy = (int) worldToScreenZ(t.z());
             g.fill(sx - 3, sy - 3, sx + 4, sy + 4, DOT_BORDER);
             g.fill(sx - 2, sy - 2, sx + 3, sy + 3, TEAMMATE_DOT);
         }
 
         for (CityData.MarkerInfo m : CityData.mapMarkers) {
-            if (!m.world().equals(CityData.mapWorld)) continue;
+            if (!m.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(m.x()), sy = (int) worldToScreenZ(m.z());
             g.fill(sx - 1, sy - 5, sx + 1, sy + 1, MARKER_COLOR);
             g.fill(sx - 3, sy - 5, sx + 3, sy - 3, MARKER_COLOR);
         }
 
-        // Постройки городов — «домик»: корпус + крыша.
+        // Постройки городов — «домик»: корпус + крыша. Показываем в своём измерении, без проекции.
         for (CityData.MapBuildingInfo b : CityData.mapBuildings) {
-            if (!b.world().equals(CityData.mapWorld)) continue;
+            if (!b.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(b.x()), sy = (int) worldToScreenZ(b.z());
             g.fill(sx - 3, sy - 1, sx + 4, sy + 4, BUILDING_COLOR);
             g.fill(sx - 2, sy - 3, sx + 3, sy - 1, BUILDING_COLOR);
@@ -290,7 +359,7 @@ public class WorldMapScreen extends Screen {
         }
 
         var player = Minecraft.getInstance().player;
-        if (player != null && worldMatches(player.level().dimension(), CityData.mapWorld)) {
+        if (player != null && worldMatches(player.level().dimension(), activeWorld())) {
             int sx = (int) worldToScreenX(player.getX()), sz = (int) worldToScreenZ(player.getZ());
             g.fill(sx - 3, sz - 3, sx + 4, sz + 4, DOT_BORDER);
             g.fill(sx - 2, sz - 2, sx + 3, sz + 3, SELF_DOT);
@@ -304,32 +373,37 @@ public class WorldMapScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractRenderState(g, mouseX, mouseY, partialTick);
-        g.centeredText(this.font, "КАРТА МИРА", this.width / 2, py1() + 10, GOLD);
+        g.centeredText(this.font, viewNether ? "КАРТА НИЖНЕГО МИРА" : "КАРТА МИРА", this.width / 2, py1() + 10, GOLD);
 
-        if (!CityData.mapHasImage) {
+        if (!activeHasImage()) {
             int cy = (boxY1() + boxY2()) / 2;
-            g.centeredText(this.font, "Карта ещё не строилась", this.width / 2, cy - 4, GRAY);
+            g.centeredText(this.font, viewNether ? "Карта Нижнего мира ещё не строилась" : "Карта ещё не строилась",
+                    this.width / 2, cy - 4, GRAY);
             g.centeredText(this.font, "нажми «Обновить карту»", this.width / 2, cy + 8, DIM);
             return;
         }
-        if (CityMapTexture.get(CityData.mapVersion) == null) {
+        if (CityMapTexture.get(activeVersion(), activeTexFile()) == null) {
             g.centeredText(this.font, "Загрузка изображения…", this.width / 2, (boxY1() + boxY2()) / 2, GRAY);
         }
         g.text(this.font, "серое — там ещё никто не бывал  ·  колесо — зум, ЛКМ+тяни — двигать карту",
                 px1() + 12, boxY1() - 22, DIM);
-        g.text(this.font, "золотая рамка — твой город, синяя — чужие  ·  домик — постройка, точка — игрок (наведи курсор)  ·  ПКМ по метке — удалить",
-                px1() + 12, boxY1() - 10, DIM);
+        String hint2 = viewNether
+                ? "золотая рамка — твой город (÷8, куда вести портал), синяя — чужие  ·  точка — игрок  ·  ПКМ по метке — удалить"
+                : "золотая рамка — твой город, синяя — чужие  ·  домик — постройка, точка — игрок (наведи курсор)  ·  ПКМ по метке — удалить";
+        g.text(this.font, hint2, px1() + 12, boxY1() - 10, DIM);
 
         for (CityData.MapCityInfo c : CityData.mapCities) {
-            if (!c.world().equals(CityData.mapWorld)) continue;
-            int sx = (int) worldToScreenX(c.x());
-            int topY = (int) worldToScreenZ(c.z() - c.radius()) - 10;
-            if (!inBox(sx, topY + 10) && !inBox(sx, (int) worldToScreenZ(c.z()))) continue;
+            if (!cityVisible(c)) continue;
+            int div = (viewNether && !cityIsNative(c)) ? NETHER_SCALE : 1;
+            double cx = c.x() / (double) div, cz = c.z() / (double) div, cr = c.radius() / (double) div;
+            int sx = (int) worldToScreenX(cx);
+            int topY = (int) worldToScreenZ(cz - cr) - 10;
+            if (!inBox(sx, topY + 10) && !inBox(sx, (int) worldToScreenZ(cz))) continue;
             g.centeredText(this.font, c.name(), sx, Math.max(boxY1() + 2, topY), c.mine() ? GOLD_BRIGHT : WHITE);
         }
 
         for (CityData.MarkerInfo m : CityData.mapMarkers) {
-            if (!m.world().equals(CityData.mapWorld)) continue;
+            if (!m.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(m.x()), sy = (int) worldToScreenZ(m.z());
             if (!inBox(sx, sy)) continue;
             if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 8) {
@@ -338,7 +412,7 @@ public class WorldMapScreen extends Screen {
         }
 
         for (CityData.TeammateInfo t : CityData.mapTeammates) {
-            if (!t.world().equals(CityData.mapWorld)) continue;
+            if (!t.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(t.x()), sy = (int) worldToScreenZ(t.z());
             if (!inBox(sx, sy)) continue;
             if (Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 6) {
@@ -347,7 +421,7 @@ public class WorldMapScreen extends Screen {
         }
 
         var self = Minecraft.getInstance().player;
-        if (self != null && worldMatches(self.level().dimension(), CityData.mapWorld)) {
+        if (self != null && worldMatches(self.level().dimension(), activeWorld())) {
             int sx = (int) worldToScreenX(self.getX()), sy = (int) worldToScreenZ(self.getZ());
             if (inBox(sx, sy) && Math.abs(mouseX - sx) < 6 && Math.abs(mouseY - sy) < 6) {
                 g.text(this.font, Minecraft.getInstance().getUser().getName(), sx + 6, sy - 8, GOLD_BRIGHT);
@@ -357,7 +431,7 @@ public class WorldMapScreen extends Screen {
         // Постройка под курсором — всплывающая карточка: название, город, фото.
         CityData.MapBuildingInfo hoverBuilding = null;
         for (CityData.MapBuildingInfo b : CityData.mapBuildings) {
-            if (!b.world().equals(CityData.mapWorld)) continue;
+            if (!b.world().equals(activeWorld())) continue;
             int sx = (int) worldToScreenX(b.x()), sy = (int) worldToScreenZ(b.z());
             if (!inBox(sx, sy)) continue;
             if (Math.abs(mouseX - sx) <= 5 && Math.abs(mouseY - sy) <= 5) hoverBuilding = b;

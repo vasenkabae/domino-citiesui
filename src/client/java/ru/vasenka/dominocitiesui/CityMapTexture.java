@@ -10,52 +10,69 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Кэш плоской карты городов: один файл на сервер (/dc/citymap.png), перекачивается заново
- * только когда сервер прислал новую версию (mapVersion). Паттерн зеркалит {@link BuildingPhotos}.
+ * Кэш плоских карт городов: по одному файлу на мир (/dc/citymap.png — верхний, /dc/citymap_nether.png —
+ * Нижний), каждый перекачивается заново только когда сервер прислал новую версию. Паттерн зеркалит
+ * {@link BuildingPhotos}. Состояние держим отдельно на каждый файл (ключ — короткое имя карты).
  */
 public final class CityMapTexture {
     private CityMapTexture() {}
 
+    /** Ключи карт = имена файлов на VDS (относительно BASE_URL/dc). */
+    public static final String OVERWORLD = "citymap.png";
+    public static final String NETHER    = "citymap_nether.png";
+
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10)).build();
 
-    private static long loadedVersion = -1;
-    private static Identifier texture = null;
-    private static int texW = 1, texH = 1;
-    private static boolean pending = false;
-    private static long pendingVersion = -1;
+    private static final class Slot {
+        long loadedVersion = -1;
+        Identifier texture = null;
+        int w = 1, h = 1;
+        boolean pending = false;
+        long pendingVersion = -1;
+    }
+
+    private static final Map<String, Slot> SLOTS = new HashMap<>();
+
+    private static Slot slot(String file) {
+        return SLOTS.computeIfAbsent(file, k -> new Slot());
+    }
 
     /** Текстура карты нужной версии или null (версии ещё нет / качается / не удалось). */
-    public static Identifier get(long version) {
+    public static Identifier get(long version, String file) {
         if (version == 0) return null;
-        if (texture != null && loadedVersion == version) return texture;
-        if (pending && pendingVersion == version) return null;
-        pending = true;
-        pendingVersion = version;
-        HttpRequest req = HttpRequest.newBuilder(URI.create(BuildingPhotos.BASE_URL + "/dc/citymap.png"))
+        Slot s = slot(file);
+        if (s.texture != null && s.loadedVersion == version) return s.texture;
+        if (s.pending && s.pendingVersion == version) return null;
+        s.pending = true;
+        s.pendingVersion = version;
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BuildingPhotos.BASE_URL + "/dc/" + file))
                 .timeout(Duration.ofSeconds(15)).GET().build();
         HTTP.sendAsync(req, HttpResponse.BodyHandlers.ofByteArray()).whenComplete((resp, err) -> {
-            pending = false;
+            s.pending = false;
             if (err != null || resp.statusCode() != 200) return;
             byte[] png = resp.body();
             Minecraft mc = Minecraft.getInstance();
             mc.execute(() -> {
                 try {
                     NativeImage img = NativeImage.read(png);
-                    Identifier texId = Identifier.fromNamespaceAndPath(Protocol.NS, "city_map/" + version);
-                    mc.getTextureManager().register(texId, new DynamicTexture(() -> "city map " + version, img));
-                    texW = img.getWidth();
-                    texH = img.getHeight();
-                    texture = texId;
-                    loadedVersion = version;
+                    Identifier texId = Identifier.fromNamespaceAndPath(Protocol.NS,
+                            "city_map/" + file.replace('.', '_') + "/" + version);
+                    mc.getTextureManager().register(texId, new DynamicTexture(() -> "city map " + file + " " + version, img));
+                    s.w = img.getWidth();
+                    s.h = img.getHeight();
+                    s.texture = texId;
+                    s.loadedVersion = version;
                 } catch (Exception ignored) { }
             });
         });
         return null;
     }
 
-    public static int width() { return texW; }
-    public static int height() { return texH; }
+    public static int width(String file)  { return slot(file).w; }
+    public static int height(String file) { return slot(file).h; }
 }

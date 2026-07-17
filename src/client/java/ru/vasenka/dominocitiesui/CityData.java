@@ -102,13 +102,18 @@ public final class CityData {
     public static boolean cardCanEditLaws = false;
     public static final List<LawInfo> cardLaws = new ArrayList<>();
 
-    // Плоская карта городов (вкладка «Карта»).
+    // Плоская карта городов (клавиша Y) — верхний мир.
     public static boolean mapHasImage = false;
     public static long mapVersion = 0;
     public static String mapWorld = "";
     public static int mapMinX, mapMinZ, mapBlockSize, mapWidth, mapHeight;
     public static boolean mapInProgress = false;
     public static int mapCooldownSeconds = 0;
+    // Карта Нижнего мира (тот же экран, переключатель верх/низ). Города на ней — по координатам ÷8.
+    public static boolean netherMapHasImage = false;
+    public static long netherMapVersion = 0;
+    public static String netherMapWorld = "";
+    public static int netherMapMinX, netherMapMinZ, netherMapBlockSize, netherMapWidth, netherMapHeight;
     public static final List<MapCityInfo> mapCities = new ArrayList<>();
     public static final List<TeammateInfo> mapTeammates = new ArrayList<>();
     public static final List<MarkerInfo> mapMarkers = new ArrayList<>();
@@ -363,6 +368,18 @@ public final class CityData {
             }
             mapInProgress = in.readBoolean();
             mapCooldownSeconds = in.readInt();
+
+            netherMapHasImage = in.readBoolean();
+            if (netherMapHasImage) {
+                netherMapVersion = in.readLong();
+                netherMapWorld = in.readUTF();
+                netherMapMinX = in.readInt();
+                netherMapMinZ = in.readInt();
+                netherMapBlockSize = in.readInt();
+                netherMapWidth = in.readInt();
+                netherMapHeight = in.readInt();
+            }
+
             mapCities.clear();
             int n = in.readInt();
             for (int i = 0; i < n; i++) {
