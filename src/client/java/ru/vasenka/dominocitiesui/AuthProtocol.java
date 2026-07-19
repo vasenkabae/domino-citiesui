@@ -9,7 +9,7 @@ package ru.vasenka.dominocitiesui;
 public final class AuthProtocol {
     private AuthProtocol() {}
 
-    public static final int VERSION = 1;
+    public static final int VERSION = 2; // 1->2: state получил needsRules, добавлен A_ACCEPT_RULES
 
     public static final String NS = "dominoauth";
     public static final String CH_ACTION = "action";
@@ -19,4 +19,5 @@ public final class AuthProtocol {
     public static final byte A_REQUEST_STATE = 0;
     public static final byte A_REGISTER      = 1;
     public static final byte A_LOGIN         = 2;
+    public static final byte A_ACCEPT_RULES  = 3;
 }

@@ -209,17 +209,24 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         // Новый сервер может быть без DominoAuth вовсе — не тащим за собой чужое needsAuth.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> AuthData.reset());
 
-        // Вход/регистрация форсированы, пока needsAuth: ловим И попытку открыть любой другой
-        // экран (AFTER_INIT — без единого кадра мигания), И Esc→null (тиковый страж ниже).
+        // Вход/регистрация, затем правила сервера — оба форсированы по очереди: ловим И попытку
+        // открыть любой другой экран (AFTER_INIT — без единого кадра мигания), И Esc→null
+        // (тиковый страж ниже). needsAuth всегда приоритетнее needsRules (правила требуют
+        // знать, чей это аккаунт — сервер их и не пришлёт, пока needsAuth==true).
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
-            if (AuthData.stateReceived && AuthData.needsAuth && !(screen instanceof AuthScreen)) {
-                client.setScreen(new AuthScreen());
+            if (!AuthData.stateReceived) return;
+            if (AuthData.needsAuth) {
+                if (!(screen instanceof AuthScreen)) client.setScreen(new AuthScreen());
+            } else if (AuthData.needsRules && !(screen instanceof RulesScreen)) {
+                client.setScreen(new RulesScreen());
             }
         });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player != null && AuthData.stateReceived && AuthData.needsAuth
-                    && !(client.screen instanceof AuthScreen)) {
-                client.setScreen(new AuthScreen());
+            if (client.player == null || !AuthData.stateReceived) return;
+            if (AuthData.needsAuth) {
+                if (!(client.screen instanceof AuthScreen)) client.setScreen(new AuthScreen());
+            } else if (AuthData.needsRules && !(client.screen instanceof RulesScreen)) {
+                client.setScreen(new RulesScreen());
             }
         });
 
