@@ -56,6 +56,13 @@ public final class CityData {
     public record EventInfo(int id, String title, String description, String dateTime,
                              String creatorName, String creatorCity, String world, int x, int y, int z,
                              long createdAt, boolean canDelete, int participants, boolean participating) {}
+    /** Строка списка игроков (вкладка «Игроки»). */
+    public record PlayerEntry(String uuid, String name, boolean online, String cityName, boolean isFriend) {}
+    /** Полный профиль игрока: агрегат сервера + отношение запросившего. role: 0 житель/1 офицер/2 мэр. */
+    public record ProfileView(String uuid, String name, boolean online, String status, String title,
+                              String cityName, byte role, String firstPlayed, long hours, long mobKills,
+                              long deaths, int wanted, int reputation, List<String> badges,
+                              boolean self, boolean isFriend, boolean iRepped, String myNote) {}
 
     public static boolean protocolMismatch = false;
     public static int lastReceivedVersion = -1;
@@ -121,6 +128,10 @@ public final class CityData {
 
     // Ивенты (вкладка «Ивенты» K-меню).
     public static final List<EventInfo> events = new ArrayList<>();
+
+    // Игроки (вкладка «Игроки» K-меню).
+    public static final List<PlayerEntry> players = new ArrayList<>();
+    public static ProfileView profile = null; // открытый профиль (null = список)
 
     public static String lastResult = "";
     public static boolean lastOk = true;
@@ -445,6 +456,50 @@ public final class CityData {
                 boolean participating = in.readBoolean();
                 events.add(new EventInfo(id, title, description, dateTime, creatorName, creatorCity,
                         world, x, y, z, createdAt, canDelete, participants, participating));
+            }
+        } catch (Exception ignored) { }
+        refresh();
+    }
+
+    public static void onProfiles(byte[] data) {
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(data))) {
+            int ver = in.readInt();
+            if (ver != Protocol.VERSION) { protocolMismatch = true; lastReceivedVersion = ver; refresh(); return; }
+            byte kind = in.readByte();
+            if (kind == 0) { // список игроков
+                players.clear();
+                int n = in.readInt();
+                for (int i = 0; i < n; i++) {
+                    String uuid = in.readUTF();
+                    String name = in.readUTF();
+                    boolean online = in.readBoolean();
+                    String city = in.readUTF();
+                    boolean friend = in.readBoolean();
+                    players.add(new PlayerEntry(uuid, name, online, city, friend));
+                }
+            } else if (kind == 1) { // один профиль
+                String uuid = in.readUTF();
+                String name = in.readUTF();
+                boolean online = in.readBoolean();
+                String status = in.readUTF();
+                String title = in.readUTF();
+                String city = in.readUTF();
+                byte role = in.readByte();
+                String first = in.readUTF();
+                long hours = in.readLong();
+                long mobKills = in.readLong();
+                long deaths = in.readLong();
+                int wanted = in.readInt();
+                int reputation = in.readInt();
+                int bn = in.readInt();
+                List<String> badges = new ArrayList<>();
+                for (int i = 0; i < bn; i++) badges.add(in.readUTF());
+                boolean self = in.readBoolean();
+                boolean friend = in.readBoolean();
+                boolean repped = in.readBoolean();
+                String note = in.readUTF();
+                profile = new ProfileView(uuid, name, online, status, title, city, role, first,
+                        hours, mobKills, deaths, wanted, reputation, badges, self, friend, repped, note);
             }
         } catch (Exception ignored) { }
         refresh();

@@ -243,6 +243,15 @@ public final class CityActions {
         ClientPlayNetworking.send(new Payloads.Action(bos.toByteArray()));
     }
 
+    // ── Профили (вкладка «Игроки») ──
+    public static void requestPlayers()             { send(Protocol.A_REQUEST_PLAYERS); }
+    public static void requestProfile(String uuid)  { send(Protocol.A_REQUEST_PROFILE, uuid); }
+    public static void setStatus(String text)       { send(Protocol.A_SET_STATUS, text); }
+    public static void setProfileTitle(String title) { send(Protocol.A_SET_PROFILE_TITLE, title); }
+    public static void toggleFriend(String uuid)    { send(Protocol.A_TOGGLE_FRIEND, uuid); }
+    public static void setNote(String uuid, String text) { send(Protocol.A_SET_NOTE, uuid, text); }
+    public static void toggleRep(String uuid)       { send(Protocol.A_TOGGLE_REP, uuid); }
+
     public static void requestEvents() { send(Protocol.A_REQUEST_EVENTS); }
 
     /** Координаты берёт сервер (текущая позиция игрока) — клиент их не присылает. */

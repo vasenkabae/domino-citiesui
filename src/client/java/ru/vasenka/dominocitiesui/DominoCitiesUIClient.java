@@ -56,6 +56,7 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Buildings.TYPE, Payloads.Buildings.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.CityMap.TYPE, Payloads.CityMap.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(Payloads.Events.TYPE, Payloads.Events.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(Payloads.Profiles.TYPE, Payloads.Profiles.CODEC);
         // Профессии (dominoskills:*) — отдельный плагин на сервере, свой протокол.
         PayloadTypeRegistry.serverboundPlay().register(SkillsPayloads.Action.TYPE, SkillsPayloads.Action.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.State.TYPE, SkillsPayloads.State.CODEC);
@@ -88,6 +89,8 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> CityData.onCityMap(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(Payloads.Events.TYPE, (payload, context) ->
                 context.client().execute(() -> CityData.onEvents(payload.data())));
+        ClientPlayNetworking.registerGlobalReceiver(Payloads.Profiles.TYPE, (payload, context) ->
+                context.client().execute(() -> CityData.onProfiles(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.State.TYPE, (payload, context) ->
                 context.client().execute(() -> SkillsData.onState(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(SkillsPayloads.Xp.TYPE, (payload, context) ->

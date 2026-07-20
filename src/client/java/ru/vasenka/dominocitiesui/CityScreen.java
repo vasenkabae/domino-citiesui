@@ -29,10 +29,10 @@ import java.util.Map;
 public class CityScreen extends Screen {
 
     private static final int MODE_CITY = 0, MODE_ECONOMY = 1, MODE_DIRECTORY = 2, MODE_TOP = 3,
-            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6, MODE_EVENTS = 7;
-    private static final int MODE_COUNT = 8;
+            MODE_CONTRACTS = 4, MODE_BOUNTIES = 5, MODE_MARKET = 6, MODE_EVENTS = 7, MODE_PLAYERS = 8;
+    private static final int MODE_COUNT = 9;
     private static final String[] TAB_LABELS =
-            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок", "Ивенты"};
+            {"Мой город", "Хозяйство", "Все города", "Топы", "Контракты", "Розыск", "Рынок", "Ивенты", "Игроки"};
     private int mode = MODE_CITY;
     private EditBox input;         // название (без города) или ник для приглашения (в городе)
     private String pendingText = "";
@@ -122,6 +122,13 @@ public class CityScreen extends Screen {
     private String pendingEventDesc = "";
     private String pendingEventDate = "";
 
+    // ── Игроки (вкладка «Игроки») ──
+    private static final int PLAYERS_LIST_TOP = CONTENT_TOP + 20;
+    private static final int PLAYER_ROW_H = 16;
+    private String selectedPlayerUuid = null; // null — список; иначе открыт профиль
+    private EditBox statusInput, noteInput;
+    private String pendingStatus = "", pendingNote = "";
+
     // ── Постройки/рейтинг/комментарии (карточка города внутри «Все города») ──
     private static final int CARD_INFO_TOP = 28;        // строка описания
     private static final int CARD_TOOLBAR_TOP = 40;      // рейтинг + подвкладки
@@ -173,6 +180,8 @@ public class CityScreen extends Screen {
         if (eventTitleInput != null) pendingEventTitle = eventTitleInput.getValue();
         if (eventDescInput != null) pendingEventDesc = eventDescInput.getValue();
         if (eventDateInput != null) pendingEventDate = eventDateInput.getValue();
+        if (statusInput != null) pendingStatus = statusInput.getValue();
+        if (noteInput != null) pendingNote = noteInput.getValue();
         for (var e : pickerSearch.entrySet()) pendingPickerQuery.put(e.getKey(), e.getValue().getValue());
         for (var e : pickerAmount.entrySet()) pendingPickerAmount.put(e.getKey(), e.getValue().getValue());
         // Периодический фоновый опрос (раз в 5 сек, см. DominoCitiesUIClient) не должен рвать
@@ -189,7 +198,7 @@ public class CityScreen extends Screen {
                 || isFocused(buildingNameInput) || isFocused(buildingDescInput)
                 || isFocused(commentInput) || isFocused(mayorDescInput) || isFocused(lawInput)
                 || isFocused(cityNameInput) || isFocused(eventTitleInput) || isFocused(eventDescInput)
-                || isFocused(eventDateInput)) return true;
+                || isFocused(eventDateInput) || isFocused(statusInput) || isFocused(noteInput)) return true;
         for (EditBox b : pickerSearch.values()) if (isFocused(b)) return true;
         for (EditBox b : pickerAmount.values()) if (isFocused(b)) return true;
         return false;
@@ -222,6 +231,8 @@ public class CityScreen extends Screen {
             initMarket(top);
         } else if (mode == MODE_EVENTS) {
             initEvents(top);
+        } else if (mode == MODE_PLAYERS) {
+            initPlayers(top);
         } else if (!CityData.hasCity) {
             initNoCity(top);
         } else if (mode == MODE_ECONOMY) {
@@ -257,12 +268,16 @@ public class CityScreen extends Screen {
         selectedBuildingId = -1;
         buildingFormOpen = false;
         cardSubMode = CARD_SUB_BUILDINGS;
+        selectedPlayerUuid = null;
+        pendingStatus = "";
+        pendingNote = "";
         if (mode == MODE_TOP) CityActions.requestTop();
         if (mode == MODE_DIRECTORY) CityActions.requestDirectory();
         if (mode == MODE_CONTRACTS) CityActions.requestContracts();
         if (mode == MODE_BOUNTIES) CityActions.requestBounties();
         if (mode == MODE_MARKET) CityActions.requestMarket();
         if (mode == MODE_EVENTS) CityActions.requestEvents();
+        if (mode == MODE_PLAYERS) CityActions.requestPlayers();
         rebuildWidgets();
     }
 
@@ -913,6 +928,8 @@ public class CityScreen extends Screen {
                 if (handlePickerClick(event.x(), event.y(), y, "bountyReward")) return true;
             } else if (mode == MODE_DIRECTORY && !buildingFormOpen) {
                 if (handleDirectoryClick(event.x(), event.y())) return true;
+            } else if (mode == MODE_PLAYERS) {
+                if (handlePlayersClick(event.x(), event.y())) return true;
             }
         }
         return super.mouseClicked(event, doubleClick);
@@ -951,6 +968,138 @@ public class CityScreen extends Screen {
                 }
                 y += BUILDING_ROW_H;
             }
+        }
+        return false;
+    }
+
+    // ── Вкладка «Игроки» ─────────────────────────────────────────────────────
+
+    private static String myUuid() {
+        var p = net.minecraft.client.Minecraft.getInstance().player;
+        return p != null ? p.getUUID().toString() : "";
+    }
+
+    private static String roleName(byte role) {
+        return switch (role) { case 2 -> "мэр"; case 1 -> "офицер"; default -> "житель"; };
+    }
+
+    private void openProfile(String uuid) {
+        if (uuid == null || uuid.isEmpty()) return;
+        selectedPlayerUuid = uuid;
+        pendingStatus = "";
+        pendingNote = "";
+        CityActions.requestProfile(uuid);
+        rebuildWidgets();
+    }
+
+    private void initPlayers(int top) {
+        if (selectedPlayerUuid == null) {
+            addRenderableWidget(FancyButton.of(Component.literal("Мой профиль"), left(), top - 4, 110, 18, () -> openProfile(myUuid())));
+            addRenderableWidget(FancyButton.of(Component.literal("Обновить"), cx() - 60, this.height - 40, 120, 20, () -> CityActions.requestPlayers()));
+            return;
+        }
+        addRenderableWidget(FancyButton.of(Component.literal("← Назад"), left(), top - 4, 70, 18, () -> {
+            selectedPlayerUuid = null; pendingStatus = ""; pendingNote = ""; rebuildWidgets();
+        }));
+        CityData.ProfileView pf = CityData.profile;
+        if (pf == null || !pf.uuid().equals(selectedPlayerUuid)) return; // ждём данные
+
+        if (pf.self()) {
+            statusInput = new EditBox(this.font, left(), this.height - 92, 236, 20, Component.literal("Статус"));
+            statusInput.setMaxLength(48);
+            statusInput.setValue(pendingStatus.isEmpty() ? pf.status() : pendingStatus);
+            addRenderableWidget(statusInput);
+            addRenderableWidget(FancyButton.of(Component.literal("Сохранить статус"), left() + 240, this.height - 92, 140, 20,
+                    () -> CityActions.setStatus(statusInput.getValue())));
+            int bx = left(), by = this.height - 64;
+            addRenderableWidget(FancyButton.of(Component.literal("Без титула"), bx, by, 88, 18, () -> CityActions.setProfileTitle("")));
+            bx += 92;
+            for (String badge : pf.badges()) {
+                int w = Math.max(60, this.font.width(badge) + 12);
+                addRenderableWidget(FancyButton.of(Component.literal(badge), bx, by, w, 18, () -> CityActions.setProfileTitle(badge)));
+                bx += w + 4;
+            }
+        } else {
+            int by = this.height - 64;
+            addRenderableWidget(FancyButton.of(Component.literal(pf.isFriend() ? "Убрать из друзей" : "В друзья"),
+                    left(), by, 130, 18, () -> CityActions.toggleFriend(selectedPlayerUuid)));
+            addRenderableWidget(FancyButton.of(Component.literal(pf.iRepped() ? "Убрать уважение" : "Уважать"),
+                    left() + 136, by, 130, 18, () -> CityActions.toggleRep(selectedPlayerUuid)));
+            noteInput = new EditBox(this.font, left(), this.height - 90, 236, 20, Component.literal("Заметка (видишь только ты)"));
+            noteInput.setMaxLength(80);
+            noteInput.setValue(pendingNote.isEmpty() ? pf.myNote() : pendingNote);
+            addRenderableWidget(noteInput);
+            addRenderableWidget(FancyButton.of(Component.literal("Заметка"), left() + 240, this.height - 90, 90, 20,
+                    () -> CityActions.setNote(selectedPlayerUuid, noteInput.getValue())));
+        }
+    }
+
+    private void renderPlayers(GuiGraphicsExtractor g, int top) {
+        if (selectedPlayerUuid != null) { renderProfile(g, top); return; }
+        if (CityData.players.isEmpty()) {
+            g.centeredText(this.font, "Список игроков пуст", cx(), top + 12, GRAY);
+            return;
+        }
+        int y = PLAYERS_LIST_TOP;
+        int shown = Math.min(9, CityData.players.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.PlayerEntry pe = CityData.players.get(i);
+            int nx = seg(g, left() + 4, y, pe.name(), pe.isFriend() ? GOLD_BRIGHT : WHITE);
+            if (pe.isFriend()) nx = chip(g, nx + 6, y, "друг", TAB_ACTIVE_BG, GOLD);
+            nx = pe.online() ? chip(g, nx + 6, y, "онлайн", CHIP_GREEN_BG, GREEN)
+                             : chip(g, nx + 6, y, "оффлайн", CHIP_RED_BG, DIM);
+            if (!pe.cityName().isEmpty()) seg(g, nx + 6, y, pe.cityName(), GRAY);
+            y += PLAYER_ROW_H;
+        }
+        if (CityData.players.size() > shown) {
+            g.text(this.font, "… ещё " + (CityData.players.size() - shown) + " игроков", left() + 4, y, DIM);
+        } else {
+            g.text(this.font, "клик по игроку — профиль", left() + 4, y + 2, DIM);
+        }
+    }
+
+    private void renderProfile(GuiGraphicsExtractor g, int top) {
+        CityData.ProfileView pf = CityData.profile;
+        if (pf == null || !pf.uuid().equals(selectedPlayerUuid)) {
+            g.centeredText(this.font, "Загрузка профиля…", cx(), top + 14, GRAY);
+            return;
+        }
+        int y = top + 6;
+        int nx = seg(g, left(), y, pf.name(), pf.online() ? GOLD_BRIGHT : GRAY);
+        nx = pf.online() ? chip(g, nx + 8, y, "онлайн", CHIP_GREEN_BG, GREEN)
+                         : chip(g, nx + 8, y, "оффлайн", CHIP_RED_BG, DIM);
+        if (!pf.title().isEmpty()) chip(g, nx + 8, y, pf.title(), TAB_ACTIVE_BG, GOLD_BRIGHT);
+        y += 14;
+        if (!pf.status().isEmpty()) { g.text(this.font, "«" + pf.status() + "»", left(), y, SILVER); y += 14; }
+        if (!pf.badges().isEmpty()) {
+            int bx = left();
+            for (String b : pf.badges()) bx = chip(g, bx, y, b, CARD, GOLD) + 4;
+            y += 16;
+        }
+        y += 2;
+        String cityLine = pf.cityName().isEmpty() ? "Без города"
+                : "Город: " + pf.cityName() + " (" + roleName(pf.role()) + ")";
+        g.text(this.font, cityLine, left(), y, GRAY); y += 12;
+        g.text(this.font, "На сервере с " + pf.firstPlayed() + " · " + pf.hours() + " ч в игре", left(), y, GRAY); y += 12;
+        g.text(this.font, "Убийств мобов: " + pf.mobKills() + " · смертей: " + pf.deaths(), left(), y, GRAY); y += 12;
+        g.text(this.font, "Репутация: " + pf.reputation(), left(), y, pf.reputation() > 0 ? GREEN : GRAY); y += 12;
+        if (pf.wanted() > 0) { g.text(this.font, "⚑ Разыскивается: " + pf.wanted() + " заказ(ов)", left(), y, RED); y += 12; }
+        if (!pf.self() && !pf.myNote().isEmpty()) { g.text(this.font, "Заметка: " + pf.myNote(), left(), y, BLUE); y += 12; }
+    }
+
+    /** Клик по строке списка игроков → открыть профиль. */
+    private boolean handlePlayersClick(double mx, double my) {
+        if (selectedPlayerUuid != null) return false;
+        int y = PLAYERS_LIST_TOP;
+        int shown = Math.min(9, CityData.players.size());
+        for (int i = 0; i < shown; i++) {
+            CityData.PlayerEntry pe = CityData.players.get(i);
+            if (mx >= left() - 6 && mx < right() + 6 && my >= y - 3 && my < y + PLAYER_ROW_H - 3) {
+                FancyButton.uiClick();
+                openProfile(pe.uuid());
+                return true;
+            }
+            y += PLAYER_ROW_H;
         }
         return false;
     }
@@ -1030,6 +1179,8 @@ public class CityScreen extends Screen {
             bgMarket(g, top);
         } else if (mode == MODE_EVENTS) {
             bgEvents(g, top, mouseX, mouseY);
+        } else if (mode == MODE_PLAYERS) {
+            bgPlayers(g, top, mouseX, mouseY);
         } else if (!CityData.hasCity) {
             bgNoCity(g, top);
         } else if (mode == MODE_ECONOMY) {
@@ -1056,6 +1207,18 @@ public class CityScreen extends Screen {
     private void bgNoCity(GuiGraphicsExtractor g, int top) {
         g.fill(cx() - 130, top + 2, cx() + 130, top + 102, CARD);
         g.outline(cx() - 130, top + 2, 260, 100, PANEL_EDGE);
+    }
+
+    private void bgPlayers(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
+        if (selectedPlayerUuid != null) return; // в карточке профиля подложки строк не нужны
+        int y = PLAYERS_LIST_TOP;
+        int shown = Math.min(9, CityData.players.size());
+        for (int i = 0; i < shown; i++) {
+            boolean hover = mouseX >= left() - 6 && mouseX < right() + 6 && mouseY >= y - 3 && mouseY < y + PLAYER_ROW_H - 3;
+            if (hover) g.fill(left() - 6, y - 3, right() + 6, y + PLAYER_ROW_H - 3, ROW_HOVER);
+            else if (i % 2 == 0) g.fill(left() - 6, y - 3, right() + 6, y + PLAYER_ROW_H - 3, ROW_A);
+            y += PLAYER_ROW_H;
+        }
     }
 
     private void bgCity(GuiGraphicsExtractor g, int top, int mouseX, int mouseY) {
@@ -1261,6 +1424,8 @@ public class CityScreen extends Screen {
             renderMarket(g, top, mouseX, mouseY);
         } else if (mode == MODE_EVENTS) {
             renderEvents(g, top);
+        } else if (mode == MODE_PLAYERS) {
+            renderPlayers(g, top);
         } else if (!CityData.hasCity) {
             g.centeredText(this.font, "У тебя пока нет города", cx(), top + 14, WHITE);
             g.centeredText(this.font, "Оснуй свой — прямо там, где стоишь", cx(), top + 28, GRAY);

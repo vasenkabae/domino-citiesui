@@ -7,7 +7,7 @@ package ru.vasenka.dominocitiesui;
 public final class Protocol {
     private Protocol() {}
 
-    public static final int VERSION = 17;
+    public static final int VERSION = 18;
 
     public static final String NS = "dominocities";
     public static final String CH_ACTION    = "action";
@@ -22,6 +22,7 @@ public final class Protocol {
     public static final String CH_BUILDINGS = "buildings";
     public static final String CH_CITY_MAP  = "citymap";
     public static final String CH_EVENTS    = "events";
+    public static final String CH_PROFILES  = "profiles";
 
     public static final byte A_REQUEST_STATE = 0;
     public static final byte A_REQUEST_TOP   = 1;
@@ -72,4 +73,12 @@ public final class Protocol {
     public static final byte A_DELETE_EVENT   = 48;
     public static final byte A_TOGGLE_EVENT_PARTICIPATE = 49;
     public static final byte A_ROAD_TO_CITY  = 50; // + UTF cityName — дорога до другого города (мэр/офицер)
+
+    public static final byte A_REQUEST_PLAYERS = 51;
+    public static final byte A_REQUEST_PROFILE = 52; // + UTF uuid
+    public static final byte A_SET_STATUS      = 53; // + UTF text
+    public static final byte A_SET_PROFILE_TITLE = 54; // + UTF title
+    public static final byte A_TOGGLE_FRIEND   = 55; // + UTF uuid
+    public static final byte A_SET_NOTE        = 56; // + UTF uuid + UTF text
+    public static final byte A_TOGGLE_REP      = 57; // + UTF uuid
 }

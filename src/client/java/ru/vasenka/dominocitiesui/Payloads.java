@@ -107,4 +107,11 @@ public final class Payloads {
                 (buf, p) -> buf.writeBytes(p.data), buf -> new Events(readAll(buf)));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+
+    public record Profiles(byte[] data) implements CustomPacketPayload {
+        public static final Type<Profiles> TYPE = new Type<>(id(Protocol.CH_PROFILES));
+        public static final StreamCodec<FriendlyByteBuf, Profiles> CODEC = StreamCodec.of(
+                (buf, p) -> buf.writeBytes(p.data), buf -> new Profiles(readAll(buf)));
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 }
