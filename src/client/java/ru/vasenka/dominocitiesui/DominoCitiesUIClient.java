@@ -28,6 +28,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.concurrent.CompletableFuture;
+
 public class DominoCitiesUIClient implements ClientModInitializer {
 
     private static KeyMapping openKey;
@@ -286,9 +288,15 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         }
     }
 
-    /** Переподключение к последнему серверу с главного меню — без выхода в лаунчер. */
+    /**
+     * Переподключение к последнему серверу с главного меню — без выхода в лаунчер. DominoAuth
+     * пускает только по пропуску от лаунчера (см. ReconnectClearance) — сначала фоном
+     * предъявляем токен устройства, потом уже коннектимся (сеть — не в клиентском потоке).
+     */
     private static void reconnect(Minecraft mc, Screen from) {
         if (lastServer == null) return;
-        ConnectScreen.startConnecting(from, mc, ServerAddress.parseString(lastServer.ip), lastServer, false, null);
+        CompletableFuture.runAsync(ReconnectClearance::clearBestEffort)
+                .thenRun(() -> mc.execute(() ->
+                        ConnectScreen.startConnecting(from, mc, ServerAddress.parseString(lastServer.ip), lastServer, false, null)));
     }
 }
