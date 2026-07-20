@@ -874,6 +874,7 @@ public class CityScreen extends Screen {
     private boolean handlePickerClick(double mouseX, double mouseY, int blockY, String key) {
         for (MatchRect m : pickerMatchRects(blockY, key)) {
             if (m.contains(mouseX, mouseY)) {
+                FancyButton.uiClick();
                 pickerMaterial.put(key, m.resource().id());
                 return true;
             }
@@ -894,7 +895,10 @@ public class CityScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         for (TabRect t : tabRects()) {
             if (t.contains(event.x(), event.y())) {
-                if (mode != t.index()) switchMode(t.index());
+                if (mode != t.index()) {
+                    FancyButton.uiClick();
+                    switchMode(t.index());
+                }
                 return true;
             }
         }
@@ -923,6 +927,7 @@ public class CityScreen extends Screen {
                 CityData.CityInfo c = CityData.directory.get(i);
                 // Правый край строки не считаем — там живёт кнопка «Вступить».
                 if (mx >= left() - 6 && mx < right() - 80 && my >= y - 5 && my < y + 21) {
+                    FancyButton.uiClick();
                     selectedCity = c.name();
                     selectedBuildingId = -1;
                     cardSubMode = CARD_SUB_BUILDINGS;
@@ -939,6 +944,7 @@ public class CityScreen extends Screen {
             for (int i = 0; i < shown; i++) {
                 CityData.BuildingInfo b = CityData.buildings.get(i);
                 if (mx >= left() - 6 && mx < right() + 6 && my >= y && my < y + BUILDING_ROW_H - 4) {
+                    FancyButton.uiClick();
                     selectedBuildingId = b.id();
                     rebuildWidgets();
                     return true;

@@ -47,9 +47,14 @@ public class SkillScreen extends Screen {
     private static final int ROW_H = 56;      // подпись ряда + карточка + зазор — верхний предел
     private static final int NODE_W = 140;
 
+    private static final int ROW_HOVER = 0x14FFFFFF;
+
     private int tab = 0; // profId выбранной вкладки
     private FancyButton resetBtn;
     private long confirmUntil;
+    /** Вспышка на узле после клика (изучение/активация) — id узла и момент клика. */
+    private String flashNodeId;
+    private long flashAt;
 
     public SkillScreen() {
         super(Component.literal("Профессии Domino Craft"));
@@ -135,6 +140,7 @@ public class SkillScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         for (TabRect t : tabRects()) {
             if (t.contains(event.x(), event.y())) {
+                if (tab != t.index()) FancyButton.uiClick();
                 tab = t.index();
                 return true;
             }
@@ -143,6 +149,7 @@ public class SkillScreen extends Screen {
             for (SkillsCatalog.Node n : SkillsCatalog.forProfession(tab)) {
                 int x = nodeX(n.col()), y = nodeY(n.tier());
                 if (event.x() >= x && event.x() < x + NODE_W && event.y() >= y && event.y() < y + nodeH()) {
+                    FancyButton.uiClick();
                     onNodeClick(n);
                     return true;
                 }
@@ -155,6 +162,7 @@ public class SkillScreen extends Screen {
         int rank = SkillsData.rank(n.id());
         // Изученная активка (ряд 4 или 7): клик = активировать (сервер сам проверит перезарядку).
         if ((n.tier() == 4 || n.tier() == 7) && rank > 0) {
+            flash(n);
             SkillsData.lastAbilityProf = tab;
             SkillsData.lastAbilityTier = n.tier();
             SkillsActions.activate(tab, n.tier());
@@ -163,7 +171,13 @@ public class SkillScreen extends Screen {
         if (rank >= n.maxRank()) return;
         if (SkillsData.prof[tab].level < SkillsCatalog.tierGate(n.tier())) return;
         if (SkillsData.pointsAvailable() < n.cost()) return;
+        flash(n);
         SkillsActions.learn(n.id());
+    }
+
+    private void flash(SkillsCatalog.Node n) {
+        flashNodeId = n.id();
+        flashAt = System.currentTimeMillis();
     }
 
     // ── Фон ──────────────────────────────────────────────────────────────────
@@ -177,7 +191,11 @@ public class SkillScreen extends Screen {
         g.fill(px1() + 1, PANEL_Y1 + 1, px2() - 1, TAB_Y + TAB_H + 3, 0x30000000);
         g.horizontalLine(px1() + 1, px2() - 2, TAB_Y + TAB_H + 3, GOLD_LINE);
         for (TabRect t : tabRects()) {
-            if (t.index() == tab) g.fill(t.x(), t.y(), t.x() + t.w(), t.y() + t.h(), TAB_ACTIVE_BG);
+            if (t.index() == tab) {
+                g.fill(t.x(), t.y(), t.x() + t.w(), t.y() + t.h(), TAB_ACTIVE_BG);
+            } else if (t.contains(mouseX, mouseY)) {
+                g.fill(t.x(), t.y(), t.x() + t.w(), t.y() + t.h(), ROW_HOVER);
+            }
         }
         // Карточка шапки профессии
         g.fill(left() - 6, CONTENT_TOP - 4, right() + 6, CONTENT_TOP + HEADER_H - 10, CARD);
@@ -282,9 +300,16 @@ public class SkillScreen extends Screen {
             if (hover) hovered = n;
 
             g.fill(x, y, x + NODE_W, y + nodeH(), NODE_BG);
-            if (hover && unlocked && !maxed) g.fill(x, y, x + NODE_W, y + nodeH(), 0x14FFFFFF);
+            if (hover && unlocked && !maxed) g.fill(x, y, x + NODE_W, y + nodeH(), ROW_HOVER);
             int edge = maxed || rank > 0 ? NODE_EDGE_GOLD : unlocked ? NODE_EDGE_ON : NODE_EDGE_OFF;
             g.outline(x, y, NODE_W, nodeH(), edge);
+
+            // Вспышка после клика — узел коротко подсвечивается золотом.
+            long sinceFlash = System.currentTimeMillis() - flashAt;
+            if (n.id().equals(flashNodeId) && sinceFlash < 250) {
+                int alpha = (int) (0x60 * (1 - sinceFlash / 250f));
+                g.fill(x, y, x + NODE_W, y + nodeH(), (alpha << 24) | 0xF2B94E);
+            }
 
             int nameColor = maxed ? GOLD_BRIGHT : rank > 0 ? GOLD : unlocked ? WHITE : DIM;
             g.text(this.font, fit(n.name(), NODE_W - 12), x + 6, y + 5, nameColor);

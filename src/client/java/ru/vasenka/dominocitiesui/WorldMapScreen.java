@@ -279,10 +279,11 @@ public class WorldMapScreen extends Screen {
         if (!activeHasImage() || !inBox(event.x(), event.y())) return false;
         if (event.button() == 1) {
             CityData.MarkerInfo hit = findMarkerNear(event.x(), event.y());
-            if (hit != null) { CityActions.deleteMarker(hit.id()); return true; }
+            if (hit != null) { FancyButton.uiClick(); CityActions.deleteMarker(hit.id()); return true; }
             return false;
         }
         if (event.button() == 0 && placingMarker) {
+            FancyButton.uiClick();
             pendingMarkerWorldX = screenToWorldX(event.x());
             pendingMarkerWorldZ = screenToWorldZ(event.y());
             placingMarker = false;
