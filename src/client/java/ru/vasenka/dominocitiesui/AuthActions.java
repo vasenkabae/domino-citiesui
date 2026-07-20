@@ -6,7 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-/** Отправка действий входа/регистрации клиент → сервер (канал dominoauth:action). */
+/** Отправка действий экрана правил клиент → сервер (канал dominoauth:action). */
 public final class AuthActions {
     private AuthActions() {}
 
@@ -23,7 +23,5 @@ public final class AuthActions {
     }
 
     public static void requestState() { send(AuthProtocol.A_REQUEST_STATE); }
-    public static void register(String password, String confirm) { send(AuthProtocol.A_REGISTER, password, confirm); }
-    public static void login(String password) { send(AuthProtocol.A_LOGIN, password); }
     public static void acceptRules() { send(AuthProtocol.A_ACCEPT_RULES); }
 }

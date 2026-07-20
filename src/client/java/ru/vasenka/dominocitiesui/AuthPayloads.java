@@ -32,11 +32,4 @@ public final class AuthPayloads {
                 (buf, p) -> buf.writeBytes(p.data), buf -> new State(readAll(buf)));
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
-
-    public record Result(byte[] data) implements CustomPacketPayload {
-        public static final Type<Result> TYPE = new Type<>(id(AuthProtocol.CH_RESULT));
-        public static final StreamCodec<FriendlyByteBuf, Result> CODEC = StreamCodec.of(
-                (buf, p) -> buf.writeBytes(p.data), buf -> new Result(readAll(buf)));
-        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
-    }
 }

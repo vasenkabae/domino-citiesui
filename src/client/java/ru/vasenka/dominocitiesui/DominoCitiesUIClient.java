@@ -59,10 +59,9 @@ public class DominoCitiesUIClient implements ClientModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.State.TYPE, SkillsPayloads.State.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Xp.TYPE, SkillsPayloads.Xp.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SkillsPayloads.Result.TYPE, SkillsPayloads.Result.CODEC);
-        // Вход/регистрация (dominoauth:*) — отдельный плагин, свой протокол, GUI поверх K-меню.
+        // Правила сервера (dominoauth:*) — отдельный плагин, свой протокол, GUI поверх K-меню.
         PayloadTypeRegistry.serverboundPlay().register(AuthPayloads.Action.TYPE, AuthPayloads.Action.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(AuthPayloads.State.TYPE, AuthPayloads.State.CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(AuthPayloads.Result.TYPE, AuthPayloads.Result.CODEC);
 
         // Приём снапшотов (в клиентском потоке).
         ClientPlayNetworking.registerGlobalReceiver(Payloads.State.TYPE, (payload, context) ->
@@ -95,8 +94,6 @@ public class DominoCitiesUIClient implements ClientModInitializer {
                 context.client().execute(() -> SkillsData.onResult(payload.data())));
         ClientPlayNetworking.registerGlobalReceiver(AuthPayloads.State.TYPE, (payload, context) ->
                 context.client().execute(() -> AuthData.onState(payload.data())));
-        ClientPlayNetworking.registerGlobalReceiver(AuthPayloads.Result.TYPE, (payload, context) ->
-                context.client().execute(() -> AuthData.onResult(payload.data())));
 
         // Клавиша открытия окна (по умолчанию K, перебиндится в настройках управления).
         openKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -206,32 +203,26 @@ public class DominoCitiesUIClient implements ClientModInitializer {
             AuthActions.requestState();
             if (client.getCurrentServer() != null) lastServer = client.getCurrentServer();
         });
-        // Новый сервер может быть без DominoAuth вовсе — не тащим за собой чужое needsAuth.
+        // Новый сервер может быть без DominoAuth вовсе — не тащим за собой чужое needsRules.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> AuthData.reset());
 
-        // Вход/регистрация, затем правила сервера — оба форсированы по очереди: ловим И попытку
-        // открыть любой другой экран (AFTER_INIT — без единого кадра мигания), И Esc→null
-        // (тиковый страж ниже). needsAuth всегда приоритетнее needsRules (правила требуют
-        // знать, чей это аккаунт — сервер их и не пришлёт, пока needsAuth==true).
+        // Правила сервера — форсированы: ловим И попытку открыть любой другой экран
+        // (AFTER_INIT — без единого кадра мигания), И Esc→null (тиковый страж ниже).
         ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
             if (!AuthData.stateReceived) return;
-            if (AuthData.needsAuth) {
-                if (!(screen instanceof AuthScreen)) client.setScreen(new AuthScreen());
-            } else if (AuthData.needsRules && !(screen instanceof RulesScreen)) {
+            if (AuthData.needsRules && !(screen instanceof RulesScreen)) {
                 client.setScreen(new RulesScreen());
             }
         });
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null || !AuthData.stateReceived) return;
-            if (AuthData.needsAuth) {
-                if (!(client.screen instanceof AuthScreen)) client.setScreen(new AuthScreen());
-            } else if (AuthData.needsRules && !(client.screen instanceof RulesScreen)) {
+            if (AuthData.needsRules && !(client.screen instanceof RulesScreen)) {
                 client.setScreen(new RulesScreen());
             }
         });
 
-        // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть пройти вход/регистрацию,
-        // AuthScreen выше держит client.screen занятым, пока needsAuth), пока игрок не нажал
+        // Памятка новичка: авто-показ после входа (пауза ~10 сек — успеть пройти правила сервера,
+        // RulesScreen выше держит client.screen занятым, пока needsRules), пока игрок не нажал
         // «Больше не показывать». Если в момент срабатывания открыт другой экран — ждём.
         int[] guideDelay = {-1};
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {

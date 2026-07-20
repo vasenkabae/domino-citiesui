@@ -6,7 +6,7 @@ import net.minecraft.network.chat.Component;
 
 /**
  * Правила сервера — принудительный экран после входа (см. DominoCitiesUIClient), пока
- * needsRules. Как AuthScreen: shouldCloseOnEsc()==false, тиковый страж переоткрывает,
+ * needsRules: shouldCloseOnEsc()==false, тиковый страж переоткрывает,
  * закрывает себя не сам, а через AuthData.refresh() после подтверждения сервером.
  *
  * Кнопка «Я ознакомился и подтверждаю» неактивна, пока игрок не долистал до последней
